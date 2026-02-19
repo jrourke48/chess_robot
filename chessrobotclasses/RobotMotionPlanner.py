@@ -1,5 +1,5 @@
 import chess
-from ChessBoard import ChessBoard
+from ChessStateValidatorMoveParser import ChessBoard
 import numpy as np
 
 class RobotMotionPlanner:
