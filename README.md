@@ -30,6 +30,13 @@ The exact package depends on your controller/SDK.
 - If your interface is serial-based, `pyserial` is already included in `requirements.txt`
 - Keep vendor SDK docs in this repo under a `docs/` folder if needed
 
+### Windows hardware tools (included in this repo)
+These two files are committed in the repo root for Windows setup:
+- `ch341ser.exe` (CH341 USB-serial driver installer)
+- `ServoStudio_v0.1.5.exe` (servo configuration/calibration tool)
+
+For a new machine, run both once as Administrator before first hardware bring-up.
+
 ## 3) Verify environment
 
 Run:
@@ -39,6 +46,7 @@ python scripts/verify_environment.py
 ```
 
 This checks required Python modules and whether a Stockfish binary is discoverable.
+On Windows, it also verifies that `ch341ser.exe` and `ServoStudio_v0.1.5.exe` are present.
 
 ## 4) Create/push GitHub repo
 

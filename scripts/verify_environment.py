@@ -1,4 +1,5 @@
 import importlib
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -16,6 +17,11 @@ OPTIONAL_MODULES = [
     "picamera2",   # only needed on Raspberry Pi camera setups
     "hiwonder",    # if using vendor python package
     "lx16a",       # common LX-16A servo package name
+]
+
+WINDOWS_REQUIRED_TOOLS = [
+    "ch341ser.exe",
+    "ServoStudio_v0.1.5.exe",
 ]
 
 
@@ -36,6 +42,17 @@ def check_stockfish_binary():
     ]
     explicit = any(path.exists() for path in common_paths)
     return in_path or explicit
+
+
+def check_windows_tools():
+    missing = []
+    for tool_name in WINDOWS_REQUIRED_TOOLS:
+        if Path(tool_name).exists():
+            print(f"[OK] Windows hardware tool found: {tool_name}")
+        else:
+            print(f"[MISSING] Windows hardware tool not found in repo root: {tool_name}")
+            missing.append(tool_name)
+    return missing
 
 
 def main():
@@ -62,6 +79,9 @@ def main():
     else:
         print("[MISSING] Stockfish binary not found in PATH/common install locations")
         missing_required.append("stockfish-binary")
+
+    if os.name == "nt":
+        missing_required.extend(check_windows_tools())
 
     if missing_required:
         print("\nEnvironment check FAILED.")
