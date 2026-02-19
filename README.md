@@ -21,8 +21,35 @@ pip install -r requirements-rpi-camera.txt
 
 ### Stockfish engine binary (required)
 Install Stockfish and make sure the executable is accessible.
-- Windows: add `stockfish.exe` to PATH or pass its absolute path to `ChessBoard(engine_path=...)`
-- Linux/RPi: often available at `/usr/games/stockfish`
+
+Windows (PowerShell + winget):
+
+```powershell
+winget install --id Stockfish.Stockfish -e
+```
+
+macOS (Homebrew):
+
+```bash
+brew install stockfish
+```
+
+Ubuntu/Debian/RPi OS:
+
+```bash
+sudo apt update
+sudo apt install -y stockfish
+```
+
+If `stockfish` is not on your `PATH`, set `STOCKFISH_PATH`:
+
+```powershell
+$env:STOCKFISH_PATH = "C:\path\to\stockfish.exe"
+```
+
+```bash
+export STOCKFISH_PATH=/path/to/stockfish
+```
 
 ### Hiwonder servo interface (required for low-level hardware control)
 The exact package depends on your controller/SDK.

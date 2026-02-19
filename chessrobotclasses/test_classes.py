@@ -120,7 +120,7 @@ def test_individual_classes():
     print("\n[Test 2] ChessBoard Class")
     print("-" * 70)
     try:
-        chessboard = ChessBoard(engine_path="/usr/games/stockfish")
+        chessboard = ChessBoard()
         
         # Test FEN validation
         fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"

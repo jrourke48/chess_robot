@@ -6,7 +6,7 @@ class ChessBoard:
         def __init__(self, position, piece):
             self.position = position  # file and rank 'a' through 'h' and 1 through 8 or off the board for captured pieces
             self.piece = piece  # chess.Piece object or None for empty squares
-    def __init__(self, engine_path):
+    def __init__(self, engine_path=None):
         self.engine = Stockfish(engine_path)
         self.dimension = 10 # size of chessboard in inches
         self.square_size = self.dimension / 8 # size of each square in inches  

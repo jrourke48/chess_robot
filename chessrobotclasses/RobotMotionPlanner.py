@@ -4,7 +4,7 @@ import numpy as np
 
 class RobotMotionPlanner:
     def __init__(self):
-        self.chessboard = ChessBoard(engine_path="/usr/games/stockfish")
+        self.chessboard = ChessBoard()
         self.robothomeframe = np.array([ # apprixomate matrix representing robot end effector home frame
                             [1, 0, 0, 5],
                             [0, 1, 0, 0],
