@@ -1,0 +1,2 @@
+# Raspberry Pi camera support (install on Raspberry Pi OS)
+picamera2>=0.3.18
