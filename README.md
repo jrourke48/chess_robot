@@ -22,6 +22,12 @@ pip install -r requirements-rpi-camera.txt
 ### Stockfish engine binary (required)
 Install Stockfish and make sure the executable is accessible.
 
+The project auto-detects bundled binaries first:
+- `stockfishwindow/stockfish-windows-x86-64-avx2.exe`
+- `stockfishlinux/stockfish-ubuntu-x86-64-avx2`
+
+If those are present, no extra path setup is needed.
+
 Windows (PowerShell + winget):
 
 ```powershell

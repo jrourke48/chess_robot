@@ -1,5 +1,8 @@
 # Core chess logic
 python-chess>=1.999
+stockfish>=3.28.0
+
+# Computer vision and image processing and robotic frame transformations
 numpy>=1.24
 
 # CV / ML pipeline
@@ -9,3 +12,7 @@ scikit-learn>=1.3
 
 # Optional but common for robotics serial interfaces (Hiwonder/LX-16A)
 pyserial>=3.5
+asyncio>=3.4
+
+# Note: Stockfish engine binary is still required separately.
+# Install via winget/brew/apt and/or set STOCKFISH_PATH (see README).

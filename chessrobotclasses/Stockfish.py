@@ -27,10 +27,16 @@ class Stockfish:
             return path
 
         candidates = []
+        repo_root = Path(__file__).resolve().parent.parent
 
         env_path = os.getenv("STOCKFISH_PATH")
         if env_path:
             candidates.append(env_path)
+
+        candidates.extend([
+            repo_root / "stockfishwindow" / "stockfish-windows-x86-64-avx2.exe",
+            repo_root / "stockfishlinux" / "stockfish-ubuntu-x86-64-avx2",
+        ])
 
         in_path = shutil.which("stockfish")
         if in_path:
