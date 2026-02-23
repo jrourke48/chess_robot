@@ -1,3 +1,8 @@
+"""!
+@file aruco_warp.py
+@brief Interactive ArUco-based board warping utility for camera alignment and visualization.
+"""
+
 import time
 import cv2
 import numpy as np

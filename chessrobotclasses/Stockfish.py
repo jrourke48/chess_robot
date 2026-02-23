@@ -1,9 +1,18 @@
+"""!
+@file Stockfish.py
+@brief Lightweight UCI wrapper for locating and communicating with a Stockfish binary.
+"""
+
 import subprocess
 import os
 import shutil
 from pathlib import Path
 
 class Stockfish:
+    """!
+    @brief Manages a Stockfish subprocess and basic UCI command exchange.
+    """
+
     def __init__(self, path=None):
         resolved_path = self._resolve_path(path)
         self.process = subprocess.Popen(

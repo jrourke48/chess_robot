@@ -1,5 +1,6 @@
-"""
-Debug occupancy detection - visualize which squares are detected as occupied
+"""!
+@file debug_occupancy.py
+@brief Visual debugging tool for occupancy detection across warped board squares.
 """
 
 import cv2

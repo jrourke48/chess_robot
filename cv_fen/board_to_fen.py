@@ -1,6 +1,6 @@
-"""
-Full ArUco-based chessboard to FEN pipeline for Raspberry Pi Chess Robot
-Pipeline: Capture → ArUco detect → Warp → Normalize → Split 8x8 → Occupancy → Classify → FEN
+"""!
+@file board_to_fen.py
+@brief End-to-end ArUco vision pipeline that converts camera frames into board FEN strings.
 """
 
 import time

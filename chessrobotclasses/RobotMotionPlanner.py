@@ -1,8 +1,17 @@
+"""!
+@file RobotMotionPlanner.py
+@brief Generates robot waypoints for legal chess moves on the physical board.
+"""
+
 import chess
 from ChessStateValidatorMoveParser import ChessBoard
 import numpy as np
 
 class RobotMotionPlanner:
+    """!
+    @brief Converts chess moves into spatial waypoints for robot end-effector motion.
+    """
+
     def __init__(self):
         # Z offset for the robot to lift pieces off the board in inches, calculated as twice the
         #height of the tallest piece (queen) plus a clearance of 1 inch

@@ -1,5 +1,6 @@
-"""
-Train a piece classifier on organized square images
+"""!
+@file train_classifier.py
+@brief Trains and exports a chess-piece image classifier from labeled square datasets.
 """
 
 import tensorflow as tf

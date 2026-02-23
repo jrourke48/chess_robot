@@ -1,3 +1,8 @@
+"""!
+@file ChessStateValidatorMoveParser.py
+@brief Compatibility loader for the implementation file with special characters in its name.
+"""
+
 import importlib.util
 from pathlib import Path
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""
-End-to-end pipeline tests:
-previous/current FEN -> infer move -> validate move -> generate next move ->
-parse to chess waypoints -> convert to robot coordinates.
+"""!
+@file test_classes.py
+@brief End-to-end tests for FEN parsing, move validation, and motion planning integration.
 """
 
 import chess

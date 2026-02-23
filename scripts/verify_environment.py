@@ -1,3 +1,8 @@
+"""!
+@file verify_environment.py
+@brief Checks required Python modules and platform tools for the chess robot environment.
+"""
+
 import importlib
 import os
 import shutil

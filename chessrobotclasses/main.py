@@ -1,3 +1,8 @@
+"""!
+@file main.py
+@brief Entry point for integrating chess state parsing, planning, and robot motion execution.
+"""
+
 import asyncio
 import chess
 import numpy as np
@@ -9,6 +14,9 @@ from InverseKinematics_TrajectoryPlanner import (
     fifth_order_spline,
 )
 def main():
+    """!
+    @brief Application entry point for the chess robot control loop.
+    """
     pass
 if __name__ == "__main__":
     main()

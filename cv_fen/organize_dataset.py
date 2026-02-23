@@ -1,6 +1,6 @@
-"""
-Helper script to organize square images into labeled folders for training
-Shows each square image and asks you to label it
+"""!
+@file organize_dataset.py
+@brief Interactive utility for labeling and organizing square images into class folders.
 """
 
 import cv2

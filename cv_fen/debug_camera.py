@@ -1,6 +1,6 @@
-"""
-Debug script to save what the camera sees and detect markers
-Saves the raw image so you can check if markers are visible
+"""!
+@file debug_camera.py
+@brief Captures and saves raw camera frames to debug ArUco marker visibility.
 """
 
 import cv2

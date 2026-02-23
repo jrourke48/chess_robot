@@ -1,3 +1,8 @@
+"""!
+@file test_camera.py
+@brief Minimal camera smoke test script for image capture validation.
+"""
+
 from picamera2 import Picamera2
 
 # Initialize camera

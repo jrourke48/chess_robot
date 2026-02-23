@@ -1,3 +1,8 @@
+"""!
+@file generate_aruco_markers.py
+@brief Generates printable ArUco markers used as board corner fiducials.
+"""
+
 import cv2
 import numpy as np
 

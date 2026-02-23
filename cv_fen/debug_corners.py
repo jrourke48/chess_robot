@@ -1,5 +1,6 @@
-"""
-Debug script to visualize which marker corners are being selected for warping
+"""!
+@file debug_corners.py
+@brief Visualizes detected ArUco corners used for homography and board warping.
 """
 
 import cv2

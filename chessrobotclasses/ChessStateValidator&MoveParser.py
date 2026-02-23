@@ -1,8 +1,21 @@
+"""!
+@file ChessStateValidator&MoveParser.py
+@brief Implements chess state validation, move detection, and best-move generation.
+"""
+
 import chess
 from Stockfish import Stockfish
 
 class ChessBoard:
+    """!
+    @brief Tracks board state, validates detected moves, and interfaces with Stockfish.
+    """
+
     class ChessSquare:
+        """!
+        @brief Lightweight container for a chess square position and its occupying piece.
+        """
+
         def __init__(self, position, piece):
             self.position = position  # file and rank 'a' through 'h' and 1 through 8 or off the board for captured pieces
             self.piece = piece  # chess.Piece object or None for empty squares

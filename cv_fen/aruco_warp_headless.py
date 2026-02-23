@@ -1,3 +1,8 @@
+"""!
+@file aruco_warp_headless.py
+@brief Headless ArUco-based board warp capture utility for non-GUI environments.
+"""
+
 import time
 import cv2
 import numpy as np

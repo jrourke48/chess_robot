@@ -1,6 +1,6 @@
-"""
-Visualize the board square extraction to verify correct alignment
-Saves annotated images showing the 8x8 grid overlay
+"""!
+@file test_grid_alignment.py
+@brief Validates board warp alignment by overlaying and saving an 8x8 extraction grid.
 """
 
 import cv2

@@ -1,6 +1,6 @@
-"""
-Extract and save individual square images for training a piece classifier
-Creates a dataset folder with labeled squares
+"""!
+@file extract_squares.py
+@brief Captures warped boards and exports individual square crops for classifier datasets.
 """
 
 import cv2
