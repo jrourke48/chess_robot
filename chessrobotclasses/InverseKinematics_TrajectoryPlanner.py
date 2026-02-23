@@ -37,7 +37,7 @@ def chess_robot_inversekinematics(x, y, z):
     l4 = 13.0   # manhattan z offset [in]
     lem = 1  # end-effector frame electromagnet z offset [in]
     #intermediate variables for geometric calculations
-    int1 = l1**2 - l2**2 
+    int1 = l1**2 + l2**2 
     int2 = l3**2 + l4**2
     lam1_arg = (int2 - int1) / (-2.0 * l1 * l2)
     lam1 = math.acos(_clamp_unit(lam1_arg))
@@ -48,7 +48,7 @@ def chess_robot_inversekinematics(x, y, z):
     phi = lam2+lam3
     beta = math.pi - lam1
     #calculate the frame Tnoa based on our desired position vector geometric parameters and the target position
-    px = x-lux
+    px = x+lux
     py = y-luy
     pz = z-luz-lem
     if px == 0.0 and py == 0.0:
@@ -64,10 +64,11 @@ def chess_robot_inversekinematics(x, y, z):
 
     T0Edes = np.array([
         [nx, ox, 0, px],
-        [ny, oy, 0, py],
+        [-ny, -oy, 0, py],
         [0, 0, -1, pz],
         [0, 0, 0, 1]
     ])
+    print(f"Desired end-effector frame T0Edes:\n{T0Edes}")
     #extract the position and orientation components from the desired end-effector frame
     nz = T0Edes[2, 0]
     ox = T0Edes[0, 1]
@@ -76,14 +77,17 @@ def chess_robot_inversekinematics(x, y, z):
     px = T0Edes[0, 3]
     py = T0Edes[1, 3]
     pz = T0Edes[2, 3]
-    #First calculate theta1 based on the desired x and y position
-    theta1 = math.atan2(ox, -oy)
+    #the orientation of the end-effector frame constrains the sum of theta2-theta4, so we can calculate theta1 first using the position of the target and the orientation of the end-effector frame
+    theta1 = math.atan2(py, px)
     #next get the sum of theta2-theta4
-    THETA234 = math.atan2(nz, az)
+    THETA234 = math.atan2(-nz, -az)
+    print(f"Sum of theta2-theta4 (THETA234): {THETA234}")
     #get theta 3 next using the geometric parameters and the desired position
     #intermediate variables for the inverse kinematics calculations
     radius = math.hypot(float(px), float(py))
     theta3_arg = (radius**2 + pz**2 - l1**2 - l2**2) / (2.0 * l1 * l2)
+    print(f"Intermediate variables: radius={radius}, pz={pz}, theta3_arg={theta3_arg}")
+    print(f"theta3_arg: {theta3_arg}")  # Debug print to check the value before acos
     if theta3_arg < -1.0 or theta3_arg > 1.0:
         raise ValueError("Target position is outside reachable workspace")
     theta3 = beta - math.acos(_clamp_unit(theta3_arg))
@@ -97,7 +101,7 @@ def chess_robot_inversekinematics(x, y, z):
     theta2_arg = (X1 * pz - X2 * radius) / denominator
     theta2 = math.asin(_clamp_unit(theta2_arg)) - phi
     theta4 = THETA234 - theta2 - theta3
-    print(f"Inverse Kinematics Solution: theta1={theta1:.3f}, theta2={theta2:.3f}, theta3={theta3:.3f}, theta4={theta4:.3f}")
+    print(f"Inverse Kinematics Solution: theta1={math.degrees(theta1):.3f}, theta2={math.degrees(theta2):.3f}, theta3={math.degrees(theta3):.3f}, theta4={math.degrees(theta4):.3f}")
     return (theta1, theta2, theta3, theta4)
 #trajectory planner function to generate a trajectory for the robot to move from its 
 # current position to the target position using a cubic spline trajectory
@@ -178,9 +182,9 @@ def fifth_order_spline(t0, tf, theta0, thetaf):
 
 def main():
     # Example usage of the inverse kinematics and trajectory planner functions
-    target_x = 2.5  # inches
-    target_y = 4.375  # inches
-    target_z = 17.50  # inches
+    target_x = 8-3.5  # inches
+    target_y = 2+4.375  # inches
+    target_z = 8+4.5  # inches
 
     try:
         joint_angles = chess_robot_inversekinematics(target_x, target_y, target_z)
