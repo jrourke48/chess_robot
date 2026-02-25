@@ -4,7 +4,7 @@
 """
 
 import chess
-from .ChessStateValidatorMoveParser import ChessBoard
+from ChessStateValidatorMoveParser import ChessBoard
 import numpy as np
 
 class RobotMotionPlanner:

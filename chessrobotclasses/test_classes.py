@@ -8,9 +8,9 @@ import chess
 import math
 import numpy as np
 from pathlib import Path
-from .ChessStateValidatorMoveParser import ChessBoard
-from .RobotMotionPlanner import RobotMotionPlanner
-from .InverseKinematics_TrajectoryPlanner import (
+from ChessStateValidatorMoveParser import ChessBoard
+from RobotMotionPlanner import RobotMotionPlanner
+from InverseKinematics_TrajectoryPlanner import (
     chess_robot_inversekinematics,
     cubic_spline,
     fifth_order_spline

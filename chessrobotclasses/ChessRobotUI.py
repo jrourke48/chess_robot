@@ -10,9 +10,9 @@ import chess
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
-from .ChessStateValidatorMoveParser import ChessBoard
-from .RobotMotionPlanner import RobotMotionPlanner
-from .InverseKinematics_TrajectoryPlanner import chess_robot_inversekinematics, cubic_spline
+from ChessStateValidatorMoveParser import ChessBoard
+from RobotMotionPlanner import RobotMotionPlanner
+from InverseKinematics_TrajectoryPlanner import chess_robot_inversekinematics, cubic_spline
 
 app = FastAPI()
 
