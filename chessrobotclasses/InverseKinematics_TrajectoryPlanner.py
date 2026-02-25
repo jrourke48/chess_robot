@@ -68,7 +68,6 @@ def chess_robot_inversekinematics(x, y, z):
         [0, 0, -1, pz],
         [0, 0, 0, 1]
     ])
-    print(f"Desired end-effector frame T0Edes:\n{T0Edes}")
     #extract the position and orientation components from the desired end-effector frame
     nz = T0Edes[2, 0]
     ox = T0Edes[0, 1]
@@ -81,13 +80,12 @@ def chess_robot_inversekinematics(x, y, z):
     theta1 = math.atan2(py, px)
     #next get the sum of theta2-theta4
     THETA234 = math.atan2(-nz, -az)
-    print(f"Sum of theta2-theta4 (THETA234): {THETA234}")
     #get theta 3 next using the geometric parameters and the desired position
     #intermediate variables for the inverse kinematics calculations
     radius = math.hypot(float(px), float(py))
     theta3_arg = (radius**2 + pz**2 - l1**2 - l2**2) / (2.0 * l1 * l2)
-    print(f"Intermediate variables: radius={radius}, pz={pz}, theta3_arg={theta3_arg}")
-    print(f"theta3_arg: {theta3_arg}")  # Debug print to check the value before acos
+    #check if the target position is within the reachable workspace of the robot based 
+    # on the argument to the arccos function for theta3
     if theta3_arg < -1.0 or theta3_arg > 1.0:
         raise ValueError("Target position is outside reachable workspace")
     theta3 = beta - math.acos(_clamp_unit(theta3_arg))
@@ -101,8 +99,7 @@ def chess_robot_inversekinematics(x, y, z):
     theta2_arg = (X1 * pz - X2 * radius) / denominator
     theta2 = math.asin(_clamp_unit(theta2_arg)) - phi
     theta4 = THETA234 - theta2 - theta3
-    print(f"Inverse Kinematics Solution: theta1={math.degrees(theta1):.3f}, theta2={math.degrees(theta2):.3f}, theta3={math.degrees(theta3):.3f}, theta4={math.degrees(theta4):.3f}")
-    return (theta1, theta2, theta3, theta4)
+    return np.array([theta1, theta2, theta3, theta4])
 #trajectory planner function to generate a trajectory for the robot to move from its 
 # current position to the target position using a cubic spline trajectory
 #inputs: initial time, final time
@@ -114,31 +111,28 @@ def cubic_spline(t0, tf, theta0, thetaf):
     @brief Generates cubic polynomial coefficients with zero endpoint velocity.
     @param t0 Initial time.
     @param tf Final time.
-    @param theta0 Initial 4-joint vector.
-    @param thetaf Final 4-joint vector.
-    @return 4x4 matrix where each row contains [a0, a1, a2, a3] for one joint.
-    @throws ValueError If timing is invalid or joint vectors are not length 4.
+    @param theta0 Initial n-joint vector.
+    @param thetaf Final n-joint vector.
+    @return 1x4 matrix where each row contains [a0, a1, a2, a3] for one joint.
+    @throws ValueError If timing is invalid or joint vectors are not length n.
     """
     t0 = float(t0)
     tf = float(tf)
     if tf <= t0:
         raise ValueError("tf must be greater than t0")
-
-    theta0_vec = _as_joint_vector(theta0, "theta0")
-    thetaf_vec = _as_joint_vector(thetaf, "thetaf")
-
+    #create the theta vectors and the a_matrix for solving the cubic spline coefficients
+    #where the velocity at the endpoints is zero
+    theta_vec = np.array([theta0, 0, thetaf, 0], dtype=float)
+    #the a_matrix is based on the cubic spline equations for the boundary conditions of the trajectory
     a_matrix = np.array([
-        [1.0, t0, t0**2, t0**3],
-        [0.0, 1.0, 2.0 * t0, 3.0 * t0**2],
+        [1.0, 0, 0, 0],
+        [0.0, 1.0, 0, 0],
         [1.0, tf, tf**2, tf**3],
         [0.0, 1.0, 2.0 * tf, 3.0 * tf**2],
     ], dtype=float)
-
-    coeffs = np.zeros((4, 4), dtype=float)
-    for joint_index in range(4):
-        b_vector = np.array([theta0_vec[joint_index], 0.0, thetaf_vec[joint_index], 0.0], dtype=float)
-        coeffs[joint_index, :] = np.linalg.solve(a_matrix, b_vector)
-
+    #want to solve for the a_coefficients for the joint angle trajectory
+    coeffs = np.linalg.solve(a_matrix, theta_vec)
+    #return the coefficients for the cubic spline trajectory for each joint angle
     return coeffs
 #trajectory planner function to generate a trajectory for the robot to move from its current
 #position to the target position using a fifth-order spline trajectory
@@ -160,30 +154,27 @@ def fifth_order_spline(t0, tf, theta0, thetaf):
     tf = float(tf)
     if tf <= t0:
         raise ValueError("tf must be greater than t0")
-
-    theta0_vec = _as_joint_vector(theta0, "theta0")
-    thetaf_vec = _as_joint_vector(thetaf, "thetaf")
-
+    #create the theta vectors and the a_matrix for solving the cubic spline coefficients
+    #where the velocity at the endpoints is zero
+    theta_vec = np.array([theta0, 0, 0, thetaf, 0, 0], dtype=float)
+    #the a_matrix is based on the cubic spline equations for the boundary conditions of the trajectory
     a_matrix = np.array([
-        [1.0, t0, t0**2, t0**3, t0**4, t0**5],
-        [0.0, 1.0, 2.0 * t0, 3.0 * t0**2, 4.0 * t0**3, 5.0 * t0**4],
-        [0.0, 0.0, 2.0, 6.0 * t0, 12.0 * t0**2, 20.0 * t0**3],
+        [1.0, 0, 0, 0, 0, 0],
+        [0.0, 1.0, 0, 0, 0, 0],
+        [0.0, 0.0, 2.0, 0, 0, 0],
         [1.0, tf, tf**2, tf**3, tf**4, tf**5],
         [0.0, 1.0, 2.0 * tf, 3.0 * tf**2, 4.0 * tf**3, 5.0 * tf**4],
         [0.0, 0.0, 2.0, 6.0 * tf, 12.0 * tf**2, 20.0 * tf**3],
     ], dtype=float)
-
-    coeffs = np.zeros((4, 6), dtype=float)
-    for joint_index in range(4):
-        b_vector = np.array([theta0_vec[joint_index], 0.0, 0.0, thetaf_vec[joint_index], 0.0, 0.0], dtype=float)
-        coeffs[joint_index, :] = np.linalg.solve(a_matrix, b_vector)
-
+    #want to solve for the a_coefficients for the joint angle trajectory
+    coeffs = np.linalg.solve(a_matrix, theta_vec)
+    #return the coefficients for the cubic spline trajectory for each joint angle
     return coeffs
 
 def main():
     # Example usage of the inverse kinematics and trajectory planner functions
-    target_x = 8-3.5  # inches
-    target_y = 2+4.375  # inches
+    target_x = 10-3.5  # inches
+    target_y = 5+4.375  # inches
     target_z = 8+4.5  # inches
 
     try:

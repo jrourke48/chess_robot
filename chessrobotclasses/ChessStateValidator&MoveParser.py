@@ -4,7 +4,7 @@
 """
 
 import chess
-from Stockfish import Stockfish
+from .Stockfish import Stockfish
 
 class ChessBoard:
     """!
@@ -144,7 +144,7 @@ class ChessBoard:
         else:
             #only one legal move matches the detected board, so we can update the state
             self.previous_state = self.board.fen()
-            self.board = self.board.push(detected_move)
+            self.board.push(detected_move)
             self.current_state = self.board.fen()
             self.detected_move = detected_move.uci()
             self.moves_made.append(self.detected_move)
@@ -154,10 +154,19 @@ class ChessBoard:
     #and the states of the board
     def move_completed(self):
         self.waypoints = []  # Clear waypoints after move is completed
+        # Store the previous state before applying the best move
         self.previous_state = self.board.fen()
-        self.board.push(chess.Move.from_uci(self.best_move))  # Update board state with the move that was executed
+        # Only push the best move if it's legal in the current position
+        if self.best_move:
+            try:
+                move_obj = chess.Move.from_uci(self.best_move)
+                if move_obj in self.board.legal_moves:
+                    self.board.push(move_obj)  # Update board state with the move that was executed
+                    self.moves_made.append(self.best_move)  # Add the move to the moves made list
+            except ValueError:
+                # If the move is invalid, just update current_state without pushing
+                pass
         self.current_state = self.board.fen()
-        self.moves_made.append(self.best_move)  # Add the move to the moves made list
 
     # Once robot completes move, update states
     def update_state(self, move):
@@ -181,7 +190,7 @@ class ChessBoard:
 
     #inputs the detected fen string and validates the transition, 
     #then gets the next move from engine
-    def checkState_thenRun(self, detected_fen):
+    def checkstate_thenrun(self, detected_fen):
         #first validate the transition from the current board state to the detected board state, 
         # and update the board state if valid
         is_valid_transition, message = self._validate_transition_and_update(detected_fen)
@@ -197,7 +206,8 @@ class ChessBoard:
         #if we got a valid move from the engine, we can store it 
         # and return it in the message
         self.best_move = best_move
-        return True, f"{message}. Engine move: {best_move}"
+        print(f"Detected move: {self.detected_move}, Engine move: {self.best_move}")
+        return best_move
     
 
     #parse move from stockfish into waypoints for the robot
@@ -223,7 +233,7 @@ class ChessBoard:
             end_piece = self.board.piece_at(chess.parse_square(end_square))
             off = self.ChessSquare("off", None)  # represents pieces that are captured and off the board
             #create waypoints for the robot to execute the move
-            waypoints = [self.ChessSquare(start_square, start_piece), self.ChessSquare(end_square, end_piece)]
+            waypoints = [self.ChessSquare(start_square, start_piece), self.ChessSquare(end_square, start_piece)]
             #check edge cases: promotion move, en passant, castling
             #first promotion move: must be 5 characters, last character must be q, r, b, or n, and starting piece must be a pawn
             if len(move_uci) == 5:
@@ -243,7 +253,7 @@ class ChessBoard:
                 if end_piece is None and start_square[0] != end_square[0] and start_piece.piece_type == chess.PAWN:
                     #now we can add the waypoints for the en passant move
                     captured_square = end_square[0] + start_square[1]  # the square behind the target square
-                    waypoints.append(self.ChessSquare(captured_square, chess.PAWN), self.ChessSquare(off, None))
+                    waypoints.append(self.ChessSquare(captured_square, chess.PAWN), off)  # add a waypoint to capture the piece before moving the new piece
                 #next handle castling:    
                 #if the move is a king move that moves two squares, it's a castling move. The piece on the target square is not relevant for castling
                 if start_piece.piece_type == chess.KING and abs(chess.parse_square(end_square) - chess.parse_square(start_square)) == 2:
@@ -259,7 +269,7 @@ class ChessBoard:
                 if end_piece is not None:
                      #capturing move, we want to add waypoints to remove the captured piece before moving the new piece
                     waypoints.insert(0, self.ChessSquare(end_square, end_piece))  # add a waypoint to capture the piece before moving the new piece
-                    waypoints.insert(1, self.ChessSquare(off, None))  # add a waypoint to move the captured piece off the board
+                    waypoints.insert(1, off)  # add a waypoint to move the captured piece off the board
                 self.waypoints = waypoints
                 return True, move_obj
             else:
