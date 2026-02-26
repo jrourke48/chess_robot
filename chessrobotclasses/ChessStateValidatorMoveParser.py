@@ -10,6 +10,9 @@ class ChessBoard:
     """!
     @brief Tracks board state, validates detected moves, and interfaces with Stockfish.
     """
+    # Class attributes for board dimensions (constant)
+    dimension = 10  # size of chessboard in inches
+    square_size = dimension / 8  # size of each square in inches (1.25 inches)
 
     class ChessSquare:
         """!
@@ -20,9 +23,7 @@ class ChessBoard:
             self.position = position  # file and rank 'a' through 'h' and 1 through 8 or off the board for captured pieces
             self.piece = piece  # chess.Piece object or None for empty squares
     def __init__(self, engine_path=None):
-        self.engine = Stockfish(engine_path)
-        self.dimension = 10 # size of chessboard in inches
-        self.square_size = self.dimension / 8 # size of each square in inches  
+        self.engine = Stockfish(engine_path)  
         self.board = chess.Board()
         self.moves_made = [] # list of moves made in the game, in UCI format
         self.current_state = self.board.fen()
@@ -30,9 +31,9 @@ class ChessBoard:
         self.best_move = None
         self.detected_move = None
         self.waypoints = [] #waypoints to execute the move
-
-    def get_piece_height(self, piece):
-        self.piece_to_height = { #these are the actual piece heights in inches that we will use 
+    @staticmethod
+    def get_piece_height(piece):
+        piece_to_height = { #these are the actual piece heights in inches that we will use 
         # for the robot waypoints.
             chess.PAWN: 1.23,
             chess.KNIGHT: 1.575,
@@ -41,7 +42,7 @@ class ChessBoard:
             chess.QUEEN: 2.3,
             chess.KING: 2.15
         }
-        return self.piece_to_height.get(piece.piece_type, 0)  # Return 0 if piece is None or not found
+        return piece_to_height.get(piece, 0)  # Return 0 if piece is None or not found
 
     #utility function to display the board in the console for debugging
     def display_board(self):

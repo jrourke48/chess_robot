@@ -7,7 +7,7 @@ class ServoController:
     #so the position input will be a list of four values representing the desired position for each servo.
     #sub class for single servo
     class ServoMotor:
-        def __init__(self, servo_pin):
+        def __init__(self):
             pass
 
         def move_to_position(self, position):
@@ -15,10 +15,10 @@ class ServoController:
 
         def stop(self):
             pass
-    def __init__(self, servo_pin):
+    def __init__(self):
         pass
 
-    def move_to_position(self, position):
+    def update_servo_positions(self, position_vector: list):
         pass
 
     def stop(self):

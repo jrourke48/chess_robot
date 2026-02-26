@@ -106,7 +106,7 @@ def chess_robot_inversekinematics(x, y, z):
 # and two joint angle vectors each 4X1:(theta1, theta2, theta3, theta4)
 #representing the initial and final joint angles for the robot to move between
 #outputs a matrix of coefficents for a cubic spline trajectory for each joint angle
-def cubic_spline(t0, tf, theta0, thetaf):
+def cubic_spline(t0, tf, theta0, thetaf, theta_dot0=None, theta_dotf=None):
     """!
     @brief Generates cubic polynomial coefficients with zero endpoint velocity.
     @param t0 Initial time.
@@ -120,27 +120,67 @@ def cubic_spline(t0, tf, theta0, thetaf):
     tf = float(tf)
     if tf <= t0:
         raise ValueError("tf must be greater than t0")
+    T = tf - t0
     #create the theta vectors and the a_matrix for solving the cubic spline coefficients
     #where the velocity at the endpoints is zero
-    theta_vec = np.array([theta0, 0, thetaf, 0], dtype=float)
+    if theta_dot0 is None:
+        theta_dot0 = 0
+    if theta_dotf is None:
+        theta_dotf = 0
+    theta_vec = np.array([theta0, theta_dot0, thetaf, theta_dotf], dtype=float)
     #the a_matrix is based on the cubic spline equations for the boundary conditions of the trajectory
     a_matrix = np.array([
         [1.0, 0, 0, 0],
         [0.0, 1.0, 0, 0],
-        [1.0, tf, tf**2, tf**3],
-        [0.0, 1.0, 2.0 * tf, 3.0 * tf**2],
+        [1.0, T, T**2, T**3],
+        [0.0, 1.0, 2.0 * T, 3.0 * T**2],
     ], dtype=float)
     #want to solve for the a_coefficients for the joint angle trajectory
     coeffs = np.linalg.solve(a_matrix, theta_vec)
     #return the coefficients for the cubic spline trajectory for each joint angle
     return coeffs
+#the full vector version of the cubic spline function where the input theta vectors are 4X1
+# vectors representing the joint angles for each of the 4 joints and the output is a 4X4 matrix 
+# where each row contains the coefficients for the cubic spline trajectory for each joint angle
+def fullvector_cubic_spline(t0, tf, theta0, thetaf, dtheta0=None, dthetaf=None, ddtheta0=None, ddthetaf=None):
+    if dtheta0 is None:
+        dtheta0 = np.zeros(4)
+    if dthetaf is None:
+        dthetaf = np.zeros(4)
+    if ddtheta0 is None:
+        ddtheta0 = np.zeros(4)  
+    if ddthetaf is None:
+        ddthetaf = np.zeros(4)
+    all_coeffs = None  # Initialize to None to build 4x6 matrix
+    for i in range(4):
+        coeffs = fifth_order_spline(t0, tf, theta0[i], thetaf[i], dtheta0[i], dthetaf[i], ddtheta0[i], ddthetaf[i])
+        if all_coeffs is None:
+            all_coeffs = coeffs.reshape(1, -1)  # Reshape first row to 1x6
+        else:
+            all_coeffs = np.vstack((all_coeffs, coeffs))  # Stack rows to build 4x6 matrix
+    return all_coeffs
+
+#function to evaluate the cubic spline at a given time t to get the current joint angles for
+# the robot to move to at time t
+def evaluate_cubic_spline(coeffs, t):
+    """!
+    @brief Evaluates the cubic spline at a given time t.
+    @param coeffs 4x4 matrix of coefficients for each joint's cubic spline.
+    @param t Time at which to evaluate the spline.
+    @return 4-joint vector of angles at time t.
+    """
+    a0 = coeffs[:, 0]
+    a1 = coeffs[:, 1]
+    a2 = coeffs[:, 2]
+    a3 = coeffs[:, 3]
+    return a0 + a1 * t + a2 * t**2 + a3 * t**3
 #trajectory planner function to generate a trajectory for the robot to move from its current
 #position to the target position using a fifth-order spline trajectory
 #inputs: initial time, final time
 # and two joint angle vectors each 4X1:(theta1, theta2, theta3, theta4)
 #representing the initial and final joint angles for the robot to move between
 #outputs a matrix of coefficents for a fifth-order spline trajectory for each joint angle
-def fifth_order_spline(t0, tf, theta0, thetaf):
+def fifth_order_spline(t0, tf, theta0, thetaf, theta_dot0=None, theta_dotf=None, theta_ddot0=None, theta_ddotf=None):
     """!
     @brief Generates quintic polynomial coefficients with zero endpoint velocity and acceleration.
     @param t0 Initial time.
@@ -154,23 +194,68 @@ def fifth_order_spline(t0, tf, theta0, thetaf):
     tf = float(tf)
     if tf <= t0:
         raise ValueError("tf must be greater than t0")
+    T = tf - t0
     #create the theta vectors and the a_matrix for solving the cubic spline coefficients
     #where the velocity at the endpoints is zero
-    theta_vec = np.array([theta0, 0, 0, thetaf, 0, 0], dtype=float)
+    if theta_dot0 is None:
+        theta_dot0 = 0
+    if theta_dotf is None:
+        theta_dotf = 0
+    if theta_ddot0 is None:
+        theta_ddot0 = 0
+    if theta_ddotf is None:
+        theta_ddotf = 0
+    theta_vec = np.array([theta0, theta_dot0, theta_ddot0, thetaf, theta_dotf, theta_ddotf], dtype=float)
     #the a_matrix is based on the cubic spline equations for the boundary conditions of the trajectory
     a_matrix = np.array([
         [1.0, 0, 0, 0, 0, 0],
         [0.0, 1.0, 0, 0, 0, 0],
         [0.0, 0.0, 2.0, 0, 0, 0],
-        [1.0, tf, tf**2, tf**3, tf**4, tf**5],
-        [0.0, 1.0, 2.0 * tf, 3.0 * tf**2, 4.0 * tf**3, 5.0 * tf**4],
-        [0.0, 0.0, 2.0, 6.0 * tf, 12.0 * tf**2, 20.0 * tf**3],
+        [1.0, T, T**2, T**3, T**4, T**5],
+        [0.0, 1.0, 2.0 * T, 3.0 * T**2, 4.0 * T**3, 5.0 * T**4],
+        [0.0, 0.0, 2.0, 6.0 * T, 12.0 * T**2, 20.0 * T**3],
     ], dtype=float)
     #want to solve for the a_coefficients for the joint angle trajectory
     coeffs = np.linalg.solve(a_matrix, theta_vec)
     #return the coefficients for the cubic spline trajectory for each joint angle
     return coeffs
+    
 
+#the full vector version of the fifth order spline function where the input theta vectors are 4X1 vectors representing the joint angles for each of the 
+# 4 joints and the output is a 4X6 matrix where each row contains the coefficients for 
+# the fifth order spline trajectory for each joint angle  
+def fullvector_fifth_order_spline(t0, tf, theta0, thetaf, dtheta0=None, dthetaf=None, ddtheta0=None, ddthetaf=None):
+    if dtheta0 is None:
+        dtheta0 = np.zeros(4)
+    if dthetaf is None:
+        dthetaf = np.zeros(4)
+    if ddtheta0 is None:
+        ddtheta0 = np.zeros(4)  
+    if ddthetaf is None:
+        ddthetaf = np.zeros(4)
+    all_coeffs = None  # Initialize to None to build 4x6 matrix
+    for i in range(4):
+        coeffs = fifth_order_spline(t0, tf, theta0[i], thetaf[i], dtheta0[i], dthetaf[i], ddtheta0[i], ddthetaf[i])
+        if all_coeffs is None:
+            all_coeffs = coeffs.reshape(1, -1)  # Reshape first row to 1x6
+        else:
+            all_coeffs = np.vstack((all_coeffs, coeffs))  # Stack rows to build 4x6 matrix
+    return all_coeffs
+
+def evaluate_fifth_order_spline(coeffs, t):
+    """!
+    @brief Evaluates the quintic spline at a given time t.
+    @param coeffs 4x6 matrix of coefficients for each joint's quintic spline.
+    @param t Time at which to evaluate the spline.
+    @return 4-joint vector of angles at time t.
+    """
+    a0 = coeffs[:, 0]
+    a1 = coeffs[:, 1]
+    a2 = coeffs[:, 2]
+    a3 = coeffs[:, 3]
+    a4 = coeffs[:, 4]
+    a5 = coeffs[:, 5]
+    return a0 + a1 * t + a2 * t**2 + a3 * t**3 + a4 * t**4 + a5 * t**5
 def main():
     # Example usage of the inverse kinematics and trajectory planner functions
     target_x = 10-3.5  # inches

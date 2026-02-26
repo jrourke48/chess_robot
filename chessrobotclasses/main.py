@@ -7,14 +7,17 @@ import asyncio
 import time
 import chess
 import numpy as np
-from .ChessStateValidatorMoveParser import ChessBoard
-from .RobotMotionPlanner import RobotMotionPlanner
-from .test_classes import _patch_chessboard_contract_for_robot_planner, plot_robot_waypoints
-from .InverseKinematics_TrajectoryPlanner import (
+
+from ServoController import ServoController
+from ChessStateValidatorMoveParser import ChessBoard
+from RobotMotionPlanner import RobotMotionPlanner
+from InverseKinematics_TrajectoryPlanner import (
     chess_robot_inversekinematics,
     cubic_spline,
     fifth_order_spline,
 )
+from EndGameEffectorTask import EndgameEffectorFSM
+from UITask import UITaskFSM
 def main():
     """!
     @brief Runs a full sequence test from FEN parsing to robot waypoint generation. 
@@ -23,13 +26,14 @@ def main():
     @brief Application entry point for the chess robot control loop.
     """
     #flowchart of the main function:
-    #1. Initialize the chess board and robot motion planner
+    #1. Initialize the chess board, robot motion planner, servo controller, and computer vision system
     #3 wait for a move to be made on the chess board
     #run the computer vision system to detect the move 
     #put the detected move in the chessboard object to validate it and update the chess board state
     #4. If the move is valid, use parsemove() to parse the move into chessspace waypoints 
     #use the robot motion planner to generate manipulator space waypoints for the move using
-    #5.parse_chesswaypoints() inputting the chessspace waypoints
+    #5.parse_chesswaypoints() inputting the chessspace  and output the manipulator space 
+    # waypoints for the robot to execute the move
     #6. Use the inverse kinematics to change the list of waypoints in manipulator space 
     # to joint space waypoints for the robot to execute the move
     #7. Use the trajectory planner to generate a trajectory for the robot to move from its
@@ -59,30 +63,99 @@ def main():
         - manage the electromagnetic
         and limit switch and possible LEDS
     """
+    #initialize the chess board and robot motion planner
+    chess_board = ChessBoard()
+    motion_planner = RobotMotionPlanner()
+    servo_controller = ServoController()
+    #########################################################
+    #event and queue definitions for inter-task communication
+    #########################################################
+    #events that represent flags for inter-task communication and synchronization
+    begin_game = asyncio.Event()  # Event to signal the start of the game after initialization
+    use_cv = asyncio.Event()  # Event to signal whether we will use CV or manual input for moves
+    ready2move = asyncio.Event()  # Event to signal that the opponents move is complete 
+    #meaning the robot can process the current move and execute the next move
+    emag_on = asyncio.Event()  # Event to signal when to turn on the electromagnet for piece manipulation
+    move_completed = asyncio.Event()  # Event to signal that the robot has completed its move 
+    servo_mode = asyncio.Event()  # Event to signal when to switch the servo control mode
+
+    #########################################################
+    #queues to hold data that needs to be passed between tasks
+    opponent_move = asyncio.Queue() # Queue for opponent moves inputted in UI or detected by CV 
+    #depending on the game mode
+    theta_vector = asyncio.Queue() # Queue for the current joint angles of the robot, 
+    #updated by the cpu task and read by the servo controller task for motion execution
+    detected_fen = asyncio.Queue() # Queue for the detected FEN string after a move is made,
+    #updated by the CV task and read by the endgame effector CPU task for move validation
+    winner = asyncio.Queue() # Queue for the winner of the game, 
+    #updated by the endgame effector CPU task and read by the UI task to display
+    update_ui_boardstate = asyncio.Queue() # Queue for the current board state to be displayed in the UI,
+    update_ui_robot_waypoints = asyncio.Queue() # Queue for the current robot waypoints to be displayed in the UI,
+    update_ui_move_list = asyncio.Queue() # Queue for the list of moves to be displayed in the UI
+    promotion_piece = asyncio.Queue() # Queue for the piece type to promote to in a pawn promotion scenario,
+    #updated by the endgame effector CPU task and read by the UI task to display promotion options and get 
+    #user input to place the piece in the promotion square
+    ###########################################################################
+
     #asyncio tasks
     async def servo_controller_task():
         while True:
-            #query the trajectory planner for the next trajectory segment to execute and send the joint angle commands to the robot
-            await asyncio.sleep(0.1)  # Simulate control loop delay
+            #wait for the servo mode event to be set, which signals that the robot should execute the next move
+            await servo_mode.wait()
+            #read the current joint angles from the theta_vector queue
+            current_thetas = await theta_vector.get()
+            #send the joint angle commands to the robot's servo controller to execute the move
+            ServoController.update_servo_positions(current_thetas)
+    
     async def cv_task():
         while True:
             #run the computer vision system to detect the move 
             #put the detected move in the chessboard object to validate it and update the chess board state
-            await asyncio.sleep(0.5)  # Simulate CV processing delay
+            await asyncio.sleep(0.1)  # Simulate CV processing delay
+    
     async def endgameeffector_cpu_task():
-        while True:
-            #run the computer vision system to detect the move 
-            #put the detected move in the chessboard object to validate it and update the chess board state
-            await asyncio.sleep(0.5)  # Simulate endgame effector processing delay
+        # Create queues and events dictionaries for FSM
+        queues = {
+            'opponent_move': opponent_move,
+            'detected_fen': detected_fen,
+            'theta_vector': theta_vector,
+        }
+        events = {
+            'begin_game': begin_game,
+            'ready2move': ready2move,
+            'servo_mode': servo_mode,
+            'use_cv': use_cv,
+            'emag_on': emag_on,
+            'move_completed': move_completed,
+        }
+        # Create and run the FSM
+        fsm = EndgameEffectorFSM(queues, events, chess_board, motion_planner)
+        await fsm.run()
+    
     async def ui_task():
-        while True:
-            #wait for a move to be made on the chess board
-            #update the UI with the current board state and any relevant information
-            await asyncio.sleep(1.0)  # Simulate UI update delay
+        # Create queues and events dictionaries for FSM
+        queues = {
+            'detected_fen': detected_fen,
+            'winner': winner,
+            'update_ui_boardstate': update_ui_boardstate,
+            'update_ui_robot_waypoints': update_ui_robot_waypoints,
+            'update_ui_move_list': update_ui_move_list,
+        }
+        events = {
+            'begin_game': begin_game,
+            'ready2move': ready2move,
+            'move_completed': move_completed,
+            'use_cv': use_cv,
+        }
+        #create and run the FSM
+        fsm = UITaskFSM(queues, events, chess_board, motion_planner)
+        await fsm.run()
+
     async def lowlevel_sensorcontrol_task():
         while True:
             #monitor the robot's sensors for any issues or feedback during motion execution
             await asyncio.sleep(0.1)  # Simulate sensor monitoring delay
+
     #run the tasks concurrently
     loop = asyncio.get_event_loop()
     loop.create_task(cv_task())
@@ -94,3 +167,4 @@ def main():
         
 if __name__ == "__main__":
     main()
+

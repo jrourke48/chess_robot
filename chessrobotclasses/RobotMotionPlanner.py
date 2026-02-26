@@ -15,8 +15,10 @@ class RobotMotionPlanner:
     def __init__(self):
         # Z offset for the robot to lift pieces off the board in inches, calculated as twice the
         #height of the tallest piece (queen) plus a clearance of 1 inch
-        self.intermediate_z_offset = 2*ChessBoard.get_chess_piece_height(chess.QUEEN)+1
+        self.intermediate_z_offset = 2*ChessBoard.get_piece_height(chess.QUEEN)+1
+        self.maxspeed = 5.0  # max. Speed of the robot in inches per second, can be adjusted based on testing and requirements
         self.move_waypoints = [] # waypoints for the current move
+        self.emag_on = []
         self.frameEhome = np.array([ # apprixomate matrix representing robot end effector home frame
                             [1, 0, 0, 2.5],
                             [0, 1, 0, 4.375],
@@ -27,6 +29,8 @@ class RobotMotionPlanner:
         self.robot_current_frame = self.frameEhome # Initialize to home frame
         self.curmove_vector = np.array([0, 0, 0]) # Initialize move vector
         self.off = np.array([5, -5, -1])  # A position off the board for captured pieces to be moved to in inches
+        self.move_distance = 0.0  # Initialize move distance
+        self.move_time = 0.0  # Initialize move time
         #dictionary mapping chess files to indices
         self.file_to_index = {
             'a': 7,
@@ -60,9 +64,13 @@ class RobotMotionPlanner:
             robot_waypoints.append(robot_waypoint)
         #add intermediate waypoints to lift the piece off the board 
         robot_waypoints = self.add_intermediate_waypoints(robot_waypoints)
+        self.emag_on.insert(0, None)  # No electromagnet state for the home position
+        self.emag_on.append(None)  # No electromagnet state for the home position at the end
         robot_waypoints.insert(0, self.HomePos)  # Start with the home position as the first waypoint
         robot_waypoints.append(self.HomePos)  # End with the home position as the last waypoint
         self.move_waypoints = robot_waypoints
+        self.move_distance = self.get_move_distance(robot_waypoints)
+        self.move_time = self.get_move_time(robot_waypoints)
         return robot_waypoints
         
     
@@ -91,9 +99,34 @@ class RobotMotionPlanner:
         #for all waypoints in the original list, add an intermediate waypoint with the same 
         # x and y coordinates but with a z offset to lift the piece off the board before 
         # moving to the next waypoint
+        i = 0
         for waypoint in waypoints:
             intermediate_waypoint = [waypoint[0], waypoint[1], self.intermediate_z_offset]  # Same position in x and y, but with z offset to lift the piece
             new_waypoints.append(intermediate_waypoint)
+            self.emag_on.append(None)  # No electromagnet state for the intermediate waypoint
             new_waypoints.append(waypoint)
+            if i % 2 == 0:
+                self.emag_on.append(True)  # Turn on electromagnet at the start of the move
+            else:
+                self.emag_on.append(False)  # Turn off electromagnet at the end of the move
+            i += 1
             new_waypoints.append(intermediate_waypoint)  # Add the intermediate waypoint again to return to the lifted position after placing the piece down
+            self.emag_on.append(None)  # No electromagnet state for the intermediate waypoint
         return new_waypoints
+    
+
+    #function to get total distance of a move given the waypoints for the move
+    def get_move_distance(self, waypoints):
+        total_distance = 0
+        for i in range(1, len(waypoints)):
+            total_distance += np.linalg.norm(np.array(waypoints[i]) - np.array(waypoints[i-1]))
+        return total_distance
+    
+    #function to get the distance between two waypoints
+    def get_single_path_distance(self, start, end):
+        return np.linalg.norm(np.array(end) - np.array(start))
+    
+    #function to get estimated time for a move given the waypoints and a speed in inches per second
+    def get_move_time(self, waypoints):
+        distance = self.get_move_distance(waypoints)
+        return distance / (0.9*self.maxspeed)  # time = distance / speed

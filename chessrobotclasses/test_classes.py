@@ -12,35 +12,10 @@ from ChessStateValidatorMoveParser import ChessBoard
 from RobotMotionPlanner import RobotMotionPlanner
 from InverseKinematics_TrajectoryPlanner import (
     chess_robot_inversekinematics,
-    cubic_spline,
-    fifth_order_spline
+    fullvector_fifth_order_spline,
+    fullvector_cubic_spline
 )
 
-
-def _patch_chessboard_contract_for_robot_planner(chess_board):
-    ChessBoard.square_size = chess_board.square_size
-
-    def _height_lookup(piece_or_type):
-        if piece_or_type is None:
-            return 0.0
-
-        if isinstance(piece_or_type, chess.Piece):
-            piece_type = piece_or_type.piece_type
-        else:
-            piece_type = piece_or_type
-
-        piece_to_height = {
-            chess.PAWN: 1.23,
-            chess.KNIGHT: 1.575,
-            chess.BISHOP: 1.97,
-            chess.ROOK: 1.39,
-            chess.QUEEN: 2.3,
-            chess.KING: 2.15,
-        }
-        return piece_to_height.get(piece_type, 0.0)
-
-    ChessBoard.get_piece_height = staticmethod(_height_lookup)
-    ChessBoard.get_chess_piece_height = staticmethod(_height_lookup)
 
 # Utility function to plot robot waypoints in 3D space with optional chess board
 def plot_robot_waypoints(robot_waypoints, title="Robot Waypoints", save_path=None, show_plot=False, chess_board=None):
@@ -145,7 +120,6 @@ def run_full_pipeline_sequence_test():
     @brief Runs a full sequence test from FEN parsing to robot waypoint generation.
     """
     chess_board = ChessBoard()
-    _patch_chessboard_contract_for_robot_planner(chess_board)
 
     motion_planner = RobotMotionPlanner()
     if input("Run full pipeline sequence test? (y/n): ").lower() != "y":
@@ -185,10 +159,13 @@ def run_full_pipeline_sequence_test():
             print(f"Could not parse engine move {robot_move}: {parse_result}")
             continue
         chess_waypoints = chess_board.waypoints
+        for chess_wp in chess_waypoints:
+            print(f"Chess waypoint: {chess_wp.position} with piece {chess_wp.piece}") 
         #convert the chessspace waypoints to robot manipulator space waypoints 
         robot_waypoints = motion_planner.parse_chesswaypoints(chess_waypoints)
-        chess_board.move_completed()
-
+        for waypoint in robot_waypoints:
+            print(f"Robot waypoint: {waypoint}")
+    
         #convert the robot waypoints to joint space waypoints using the inverse kinematics function
         jointspace_waypoints = []
         for waypoint in robot_waypoints:
@@ -199,12 +176,10 @@ def run_full_pipeline_sequence_test():
         for i in range(1, len(jointspace_waypoints)):
             cur_thetas = jointspace_waypoints[i - 1]
             next_thetas = jointspace_waypoints[i]
-            for j in range(4):
-                cur_theta = cur_thetas[j]
-                next_theta = next_thetas[j]
-                print(f"Joint {j+1} from {math.degrees(cur_thetas[j]):.2f}° to {math.degrees(next_thetas[j]):.2f}°")
-                trajectory_coeffs = cubic_spline(0, 2, cur_theta, next_theta)  # Example: 2-second trajectory
-                print(f"Trajectory Coefficients from {cur_theta} to {next_theta}:\n{trajectory_coeffs}")
+            trajectory_coeffs = fullvector_cubic_spline(0, 5, cur_thetas, next_thetas)
+            #print(f"Trajectory coefficients for move from waypoint {i-1} to {i}:"
+              #    f"\n{trajectory_coeffs}\n")
+        chess_board.move_completed()
         
         print("Move complete. Enter the next move or 'exit'.")
 
