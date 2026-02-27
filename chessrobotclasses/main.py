@@ -17,7 +17,8 @@ from InverseKinematics_TrajectoryPlanner import (
     fifth_order_spline,
 )
 from EndGameEffectorTask import EndgameEffectorFSM
-from UITask import UITaskFSM
+from UITask import UITaskFSM, init_ui_runtime, app as ui_app
+import uvicorn
 def main():
     """!
     @brief Runs a full sequence test from FEN parsing to robot waypoint generation. 
@@ -78,9 +79,11 @@ def main():
     emag_on = asyncio.Event()  # Event to signal when to turn on the electromagnet for piece manipulation
     move_completed = asyncio.Event()  # Event to signal that the robot has completed its move 
     servo_mode = asyncio.Event()  # Event to signal when to switch the servo control mode
-
+    valid_move = asyncio.Event()  # Event to signal that the detected move has been validated and parsed successfully
     #########################################################
     #queues to hold data that needs to be passed between tasks
+    winner = asyncio.Queue() # Queue for the winner of the game,
+    #updated by the endgame effector CPU task and read by the UI task to display
     opponent_move = asyncio.Queue() # Queue for opponent moves inputted in UI or detected by CV 
     #depending on the game mode
     theta_vector = asyncio.Queue() # Queue for the current joint angles of the robot, 
@@ -91,7 +94,7 @@ def main():
     #updated by the endgame effector CPU task and read by the UI task to display
     update_ui_boardstate = asyncio.Queue() # Queue for the current board state to be displayed in the UI,
     update_ui_robot_waypoints = asyncio.Queue() # Queue for the current robot waypoints to be displayed in the UI,
-    update_ui_move_list = asyncio.Queue() # Queue for the list of moves to be displayed in the UI
+    update_ui_move_list = asyncio.Queue() # Queue for the move list to be displayed in the UI
     promotion_piece = asyncio.Queue() # Queue for the piece type to promote to in a pawn promotion scenario,
     #updated by the endgame effector CPU task and read by the UI task to display promotion options and get 
     #user input to place the piece in the promotion square
@@ -105,7 +108,8 @@ def main():
             #read the current joint angles from the theta_vector queue
             current_thetas = await theta_vector.get()
             #send the joint angle commands to the robot's servo controller to execute the move
-            ServoController.update_servo_positions(current_thetas)
+            print(f"Updating servo positions to: {current_thetas}")
+            servo_controller.update_servo_positions(current_thetas)
     
     async def cv_task():
         while True:
@@ -119,6 +123,9 @@ def main():
             'opponent_move': opponent_move,
             'detected_fen': detected_fen,
             'theta_vector': theta_vector,
+            'update_ui_boardstate': update_ui_boardstate,
+            'update_ui_robot_waypoints': update_ui_robot_waypoints,
+            'winner': winner
         }
         events = {
             'begin_game': begin_game,
@@ -126,6 +133,7 @@ def main():
             'servo_mode': servo_mode,
             'use_cv': use_cv,
             'emag_on': emag_on,
+            'valid_move': valid_move,
             'move_completed': move_completed,
         }
         # Create and run the FSM
@@ -133,37 +141,47 @@ def main():
         await fsm.run()
     
     async def ui_task():
-        # Create queues and events dictionaries for FSM
-        queues = {
-            'detected_fen': detected_fen,
-            'winner': winner,
-            'update_ui_boardstate': update_ui_boardstate,
-            'update_ui_robot_waypoints': update_ui_robot_waypoints,
-            'update_ui_move_list': update_ui_move_list,
-        }
-        events = {
-            'begin_game': begin_game,
-            'ready2move': ready2move,
-            'move_completed': move_completed,
-            'use_cv': use_cv,
-        }
-        #create and run the FSM
-        fsm = UITaskFSM(queues, events, chess_board, motion_planner)
-        await fsm.run()
+        # Start the uvicorn web server for the FastAPI app
+        config = uvicorn.Config(ui_app, host="127.0.0.1", port=8000, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
 
     async def lowlevel_sensorcontrol_task():
         while True:
+            await emag_on.wait()  # Wait for the signal to turn on the electromagnet
+            print("electromagnet onfor piece manipulation.")
+            # Here you would add the actual code to control the electromagnet hardware
             #monitor the robot's sensors for any issues or feedback during motion execution
             await asyncio.sleep(0.1)  # Simulate sensor monitoring delay
 
+    ui_queues = {
+        'detected_fen': detected_fen,
+        'winner': winner,
+        'update_ui_boardstate': update_ui_boardstate,
+        'update_ui_robot_waypoints': update_ui_robot_waypoints,
+        'update_ui_move_list': update_ui_move_list,
+        'opponent_move': opponent_move,
+    }
+    ui_events = {
+        'begin_game': begin_game,
+        'ready2move': ready2move,
+        'move_completed': move_completed,
+        'valid_move': valid_move,
+        'use_cv': use_cv,
+    }
+    init_ui_runtime(ui_queues, ui_events, chess_board, motion_planner)
+
     #run the tasks concurrently
-    loop = asyncio.get_event_loop()
-    loop.create_task(cv_task())
-    loop.create_task(servo_controller_task())
-    loop.create_task(endgameeffector_cpu_task())
-    loop.create_task(ui_task())
-    loop.create_task(lowlevel_sensorcontrol_task())
-    loop.run_forever()
+    async def run_all_tasks():
+        await asyncio.gather(
+            cv_task(),
+            servo_controller_task(),
+            endgameeffector_cpu_task(),
+            ui_task(),
+            lowlevel_sensorcontrol_task()
+        )
+    
+    asyncio.run(run_all_tasks())
         
 if __name__ == "__main__":
     main()

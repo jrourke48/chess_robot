@@ -165,6 +165,7 @@ def run_full_pipeline_sequence_test():
         robot_waypoints = motion_planner.parse_chesswaypoints(chess_waypoints)
         for waypoint in robot_waypoints:
             print(f"Robot waypoint: {waypoint}")
+        print(motion_planner.emag_on)
     
         #convert the robot waypoints to joint space waypoints using the inverse kinematics function
         jointspace_waypoints = []

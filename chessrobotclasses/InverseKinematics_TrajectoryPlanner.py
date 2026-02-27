@@ -142,22 +142,18 @@ def cubic_spline(t0, tf, theta0, thetaf, theta_dot0=None, theta_dotf=None):
 #the full vector version of the cubic spline function where the input theta vectors are 4X1
 # vectors representing the joint angles for each of the 4 joints and the output is a 4X4 matrix 
 # where each row contains the coefficients for the cubic spline trajectory for each joint angle
-def fullvector_cubic_spline(t0, tf, theta0, thetaf, dtheta0=None, dthetaf=None, ddtheta0=None, ddthetaf=None):
+def fullvector_cubic_spline(t0, tf, theta0, thetaf, dtheta0=None, dthetaf=None):
     if dtheta0 is None:
         dtheta0 = np.zeros(4)
     if dthetaf is None:
         dthetaf = np.zeros(4)
-    if ddtheta0 is None:
-        ddtheta0 = np.zeros(4)  
-    if ddthetaf is None:
-        ddthetaf = np.zeros(4)
-    all_coeffs = None  # Initialize to None to build 4x6 matrix
+    all_coeffs = None  # Initialize to None to build 4x4 matrix
     for i in range(4):
-        coeffs = fifth_order_spline(t0, tf, theta0[i], thetaf[i], dtheta0[i], dthetaf[i], ddtheta0[i], ddthetaf[i])
+        coeffs = cubic_spline(t0, tf, theta0[i], thetaf[i], dtheta0[i], dthetaf[i])
         if all_coeffs is None:
-            all_coeffs = coeffs.reshape(1, -1)  # Reshape first row to 1x6
+            all_coeffs = coeffs.reshape(1, -1)  # Reshape first row to 1x4
         else:
-            all_coeffs = np.vstack((all_coeffs, coeffs))  # Stack rows to build 4x6 matrix
+            all_coeffs = np.vstack((all_coeffs, coeffs))  # Stack rows to build 4x4 matrix
     return all_coeffs
 
 #function to evaluate the cubic spline at a given time t to get the current joint angles for
@@ -256,6 +252,8 @@ def evaluate_fifth_order_spline(coeffs, t):
     a4 = coeffs[:, 4]
     a5 = coeffs[:, 5]
     return a0 + a1 * t + a2 * t**2 + a3 * t**3 + a4 * t**4 + a5 * t**5
+
+
 def main():
     # Example usage of the inverse kinematics and trajectory planner functions
     target_x = 10-3.5  # inches
@@ -267,5 +265,52 @@ def main():
         print(f"Calculated joint angles: {joint_angles}")
     except ValueError as e:
         print(f"Error: {e}")
+    
+    # Test trajectory planning
+    print("\n--- Trajectory Planning Tests ---")
+    
+    # Define two waypoints (initial and final joint angles)
+    theta0 = np.array([0.0, 0.5, -0.3, 0.2])  # Initial joint angles (radians)
+    thetaf = np.array([0.5, 0.8, 0.1, -0.1])  # Final joint angles (radians)
+    t0, tf = 0.0, 2.0  # Trajectory from t=0 to t=2 seconds
+    
+    # Test single joint cubic spline
+    print("\n1. Single joint cubic spline (joint 0):")
+    coeffs_cubic = cubic_spline(t0, tf, theta0[0], thetaf[0])
+    print(f"   Coefficients [a0, a1, a2, a3]: {coeffs_cubic}")
+    
+    # Test single joint fifth-order spline
+    print("\n2. Single joint fifth-order spline (joint 0):")
+    coeffs_fifth = fifth_order_spline(t0, tf, theta0[0], thetaf[0])
+    print(f"   Coefficients [a0..a5]: {coeffs_fifth}")
+    
+    # Test full vector cubic spline (4 joints)
+    print("\n3. Full vector cubic spline (4 joints):")
+    all_coeffs_cubic = fullvector_cubic_spline(t0, tf, theta0, thetaf)
+    print(f"   Coefficient matrix shape: {all_coeffs_cubic.shape}")
+    print(f"   Coefficients:\n{all_coeffs_cubic}")
+    
+    # Evaluate trajectory at different times
+    print("\n4. Evaluating trajectory at key times:")
+    for t in [0.0, 0.5, 1.0, 1.5, 2.0]:
+        angles = evaluate_cubic_spline(all_coeffs_cubic, t)
+        print(f"   t={t:.1f}s: {angles}")
+    
+    # Verify boundary conditions
+    print("\n5. Verify boundary conditions:")
+    angles_t0 = evaluate_cubic_spline(all_coeffs_cubic, t0)
+    angles_tf = evaluate_cubic_spline(all_coeffs_cubic, tf)
+    print(f"   At t0: expected {theta0}, got {angles_t0}")
+    print(f"   At tf: expected {thetaf}, got {angles_tf}")
+    print(f"   Initial match: {np.allclose(angles_t0, theta0)}")
+    print(f"   Final match: {np.allclose(angles_tf, thetaf)}")
+    
+    # Test fifth order full vector
+    print("\n6. Full vector fifth-order spline (4 joints):")
+    all_coeffs_fifth = fullvector_fifth_order_spline(t0, tf, theta0, thetaf)
+    print(f"   Coefficient matrix shape: {all_coeffs_fifth.shape}")
+    angles_fifth_tf = evaluate_fifth_order_spline(all_coeffs_fifth, tf)
+    print(f"   At tf: expected {thetaf}, got {angles_fifth_tf}")
+    print(f"   Final match: {np.allclose(angles_fifth_tf, thetaf)}")
 if __name__ == "__main__":
     main()

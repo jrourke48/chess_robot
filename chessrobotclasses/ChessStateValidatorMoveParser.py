@@ -44,14 +44,48 @@ class ChessBoard:
         }
         return piece_to_height.get(piece, 0)  # Return 0 if piece is None or not found
 
+
+    #utility function to reset the board to the starting position and clear move history
+    def reset_board(self):
+        self.board.reset()
+        self.moves_made = []
+        self.current_state = self.board.starting_fen
+        self.previous_state = None
+        self.best_move = None
+        self.detected_move = None
+
+
     #utility function to display the board in the console for debugging
     def display_board(self):
         print(self.board)
+
+
+    #utility function to check for check mate and stalemate conditions
+    def check_mate(self):
+        if self.board.is_checkmate():
+            return "checkmate"
+        else:
+            return None
+
+
+    def check_notmategame_over(self):
+        if self.board.is_stalemate():
+            return "stalemate"
+        elif self.board.is_insufficient_material():
+            return "draw by insufficient material"
+        elif self.board.can_claim_fifty_moves():
+            return "draw by fifty-move rule"
+        elif self.board.can_claim_threefold_repetition():
+            return "draw by threefold repetition"
+        else:
+            return None  # Game is not over
+
 
     #utility function to compare two chess.Board objects and determine 
     #if they represent the same position (ignores move history)
     def _positions_match(self, board_a, board_b):
         return board_a.board_fen() == board_b.board_fen() and board_a.turn == board_b.turn
+
 
     #given two chess.Board objects, determine if they differ by exactly one legal move, and if so return that move. 
     #If they differ by more than one move, or if the second board is not reachable from the first by one legal move, return False
@@ -120,6 +154,7 @@ class ChessBoard:
                 return chess.Move(from_square=king_start_square, to_square=king_end_square)
             return False, "Invalid move detected (ambiguous squares)"
 
+
     #uses the utility function above to check if the transition from the current board state 
     #to the detected board state is valid (i.e., differs by exactly one legal move), 
     #and if so updates the board state and detected move accordingly.
@@ -151,6 +186,7 @@ class ChessBoard:
             self.moves_made.append(self.detected_move)
             return True, f"Detected valid move: {self.detected_move}"
     
+
      #once we have executed the move, we can clear the waypoints, update the moves made
     #and the states of the board
     def move_completed(self):
@@ -168,6 +204,7 @@ class ChessBoard:
                 # If the move is invalid, just update current_state without pushing
                 pass
         self.current_state = self.board.fen()
+
 
     # Once robot completes move, update states
     def update_state(self, move):
@@ -217,6 +254,7 @@ class ChessBoard:
             move_obj = chess.Move.from_uci(move)
             if move_obj not in self.board.legal_moves:
                 return False, f"Illegal move: {move}"
+            
 
             move_uci = move_obj.uci()
             if len(move_uci) not in (4, 5):
