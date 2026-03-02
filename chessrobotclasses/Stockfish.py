@@ -42,11 +42,7 @@ class Stockfish:
         if env_path:
             candidates.append(env_path)
 
-        candidates.extend([
-            repo_root / "stockfishwindow" / "stockfish-windows-x86-64-avx2.exe",
-            repo_root / "stockfishlinux" / "stockfish-ubuntu-x86-64-avx2",
-        ])
-
+        # Prefer system-installed stockfish first
         in_path = shutil.which("stockfish")
         if in_path:
             candidates.append(in_path)
@@ -55,6 +51,12 @@ class Stockfish:
             "/usr/games/stockfish",
             "/usr/local/bin/stockfish",
             "/opt/homebrew/bin/stockfish",
+        ])
+
+        # Repo-local binaries as fallback
+        candidates.extend([
+            repo_root / "stockfishlinux" / "stockfish-ubuntu-x86-64-avx2",
+            repo_root / "stockfishwindow" / "stockfish-windows-x86-64-avx2.exe",
             "C:/Program Files/Stockfish/stockfish.exe",
             "C:/stockfish/stockfish.exe",
         ])

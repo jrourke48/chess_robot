@@ -7,6 +7,7 @@ import asyncio
 import time
 import chess
 import numpy as np
+import gpiozero
 
 from ServoController import ServoController
 from ChessStateValidatorMoveParser import ChessBoard
@@ -68,6 +69,8 @@ def main():
     chess_board = ChessBoard()
     motion_planner = RobotMotionPlanner()
     servo_controller = ServoController()
+    #initialize low level hardware controllers
+    EMAG = Electromagnet(pin=17)
     #########################################################
     #event and queue definitions for inter-task communication
     #########################################################
@@ -77,6 +80,7 @@ def main():
     ready2move = asyncio.Event()  # Event to signal that the opponents move is complete 
     #meaning the robot can process the current move and execute the next move
     emag_on = asyncio.Event()  # Event to signal when to turn on the electromagnet for piece manipulation
+    emag_off = asyncio.Event()  # Event to signal when to turn off the electromagnet
     move_completed = asyncio.Event()  # Event to signal that the robot has completed its move 
     servo_mode = asyncio.Event()  # Event to signal when to switch the servo control mode
     valid_move = asyncio.Event()  # Event to signal that the detected move has been validated and parsed successfully
@@ -133,6 +137,7 @@ def main():
             'servo_mode': servo_mode,
             'use_cv': use_cv,
             'emag_on': emag_on,
+            'emag_off': emag_off,
             'valid_move': valid_move,
             'move_completed': move_completed,
         }
@@ -149,10 +154,15 @@ def main():
     async def lowlevel_sensorcontrol_task():
         while True:
             await emag_on.wait()  # Wait for the signal to turn on the electromagnet
-            print("electromagnet onfor piece manipulation.")
-            # Here you would add the actual code to control the electromagnet hardware
-            #monitor the robot's sensors for any issues or feedback during motion execution
-            await asyncio.sleep(0.1)  # Simulate sensor monitoring delay
+            print("Electromagnet ON for piece manipulation.")
+            EMAG.on()
+            emag_on.clear()  # Reset for next use
+            
+            await emag_off.wait()  # Wait for the signal to turn off the electromagnet
+            print("Electromagnet OFF after piece manipulation.")
+            EMAG.off()
+            emag_off.clear()  # Reset for next use
+
 
     ui_queues = {
         'detected_fen': detected_fen,

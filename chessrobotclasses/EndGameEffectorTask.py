@@ -18,6 +18,7 @@ class EndgameEffectorFSM:
         self.ready2move = events['ready2move']
         self.use_cv = events['use_cv']
         self.emag_on = events['emag_on']
+        self.emag_off = events['emag_off']
         self.valid_move = events['valid_move']
         self.move_completed = events['move_completed']
         #data storage for the queues
@@ -53,6 +54,7 @@ class EndgameEffectorFSM:
         self.valid_move.clear()
         self.servo_mode.clear()
         self.emag_on.clear()
+        self.emag_off.set()
         self.move_completed.set()  # Signal that the move has been completed
         # Reset waypoint tracking for next move
         self.cur_jwaypoint = None
@@ -227,7 +229,7 @@ class EndgameEffectorFSM:
         if self.motion_planner.emag_on[self.cur_waypoint_index] is True:
             self.emag_on.set()  # Turn on the electromagnet
         elif self.motion_planner.emag_on[self.cur_waypoint_index] is False:
-            self.emag_on.clear()  # Turn off the electromagnet
+            self.emag_off.set()  # Turn off the electromagnet
         #after setting the electromagnet state for the current waypoint, go to the state to execute
         print(f"Executing move from {self.cur_jwaypoint} to {self.next_jwaypoint} with trajectory time {self.cur_trajectory_time:.2f} seconds.")
         return self.EXECUTE_CURRENT_WAYPOINT
