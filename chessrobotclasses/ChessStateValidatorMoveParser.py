@@ -40,7 +40,7 @@ class ChessBoard:
             chess.BISHOP: 1.97,
             chess.ROOK: 1.39,
             chess.QUEEN: 2.3,
-            chess.KING: 2.15
+            chess.KING: 2.48
         }
         return piece_to_height.get(piece, 0)  # Return 0 if piece is None or not found
 
