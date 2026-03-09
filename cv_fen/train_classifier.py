@@ -173,8 +173,8 @@ def main():
     print(f"Validation Accuracy: {val_acc:.4f}")
     
     # Save model
-    model.save('piece_classifier.h5')
-    print("\n✓ Model saved as: piece_classifier.h5")
+    model.save('piece_classifier.keras')
+    print("\n✓ Model saved as: piece_classifier.keras")
     
     # Save class mapping
     class_mapping = {i: cls for i, cls in enumerate(CLASSES)}
