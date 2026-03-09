@@ -27,10 +27,10 @@ except ImportError:
 BOARD_PIX = 800  # output warp size (800x800)
 DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 
-# Occupancy tuning - balanced for pieces vs empty
-EDGE_THRESHOLD = 300  # Balanced threshold
-DIFF_THRESHOLD = 40   # Moderate sensitivity
-DIFF_PIXELS = 1200    # Reasonable pixel count
+# Occupancy tuning - optimized for background subtraction + edge detection fallback
+EDGE_THRESHOLD = 800  # Very high threshold - only use when no reference available
+DIFF_THRESHOLD = 30   # Sensitive for piece detection (background subtraction is very reliable)
+DIFF_PIXELS = 1200    # Increased to eliminate corner shadow false positives
 CENTER_CROP = 0.75    # Good center focus
 
 # ArUco marker IDs for corners (TOP-LEFT, TOP-RIGHT, BOTTOM-RIGHT, BOTTOM-LEFT)
@@ -232,10 +232,12 @@ def extract_squares(board_warp):
 # ===== Step 7: Occupancy Detection =====
 def detect_occupancy(squares, empty_board_ref=None, edge_threshold=EDGE_THRESHOLD):
     """
-    Determine which squares are occupied using edge detection
+    Determine which squares are occupied using best-available method:
+    1. Background subtraction (if empty_board_ref provided) - MOST RELIABLE
+    2. Edge detection fallback (less reliable but works without reference)
     
-    If empty_board_ref is provided, use background subtraction
-    Otherwise, use edge/texture heuristic
+    Background subtraction handles same-colored squares (white-on-white, brown-on-brown)
+    much better than edge detection.
     """
     occupied = []
     
@@ -244,7 +246,7 @@ def detect_occupancy(squares, empty_board_ref=None, edge_threshold=EDGE_THRESHOL
         for col in range(8):
             square = squares[row][col]
 
-            # Focus on the center of each square to avoid borders/grid lines
+            # Focus on center to avoid borders/grid lines
             h, w = square.shape[:2]
             ch = int(h * CENTER_CROP / 2)
             cw = int(w * CENTER_CROP / 2)
@@ -254,19 +256,45 @@ def detect_occupancy(squares, empty_board_ref=None, edge_threshold=EDGE_THRESHOL
             square_center = square[y0:y1, x0:x1]
             
             if empty_board_ref is not None:
-                # Background subtraction method
+                # PRIMARY METHOD: Background subtraction (recommended)
+                # Works reliably for all piece colors including same-colored squares
                 ref_square = empty_board_ref[row][col]
                 ref_center = ref_square[y0:y1, x0:x1]
+                
+                # Absolute difference
                 diff = cv2.absdiff(square_center, ref_center)
                 gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+                
+                # Bilateral filtering - reduces noise better than Gaussian while preserving edges
+                gray_diff = cv2.bilateralFilter(gray_diff, 5, 20, 20)
+                
+                # Threshold to binary - any color change indicates a piece
                 _, thresh = cv2.threshold(gray_diff, DIFF_THRESHOLD, 255, cv2.THRESH_BINARY)
+                
+                # Morphological cleanup - remove small noise (multiple iterations for aggressive cleaning)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+                
+                # Count significant pixels
                 occupied_pixels = cv2.countNonZero(thresh)
                 is_occupied = occupied_pixels > DIFF_PIXELS
             else:
-                # Edge density method
+                # FALLBACK METHOD: Edge detection (no reference available)
+                # Less reliable but better than nothing
                 gray = cv2.cvtColor(square_center, cv2.COLOR_BGR2GRAY)
-                edges = cv2.Canny(gray, 50, 150)
-                edge_pixels = cv2.countNonZero(edges)
+                
+                # Morphological opening to reduce noise
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                gray_opened = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
+                
+                # Canny edge detection with stricter thresholds
+                edges = cv2.Canny(gray_opened, 100, 200)
+                
+                # Dilate edges to connect nearby edge fragments
+                kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+                edges_dilated = cv2.dilate(edges, kernel_dilate, iterations=1)
+                
+                edge_pixels = cv2.countNonZero(edges_dilated)
                 is_occupied = edge_pixels > edge_threshold
             
             row_occupied.append(is_occupied)

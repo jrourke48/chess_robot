@@ -9,6 +9,9 @@ import shutil
 from pathlib import Path
 import numpy as np
 
+# ---- Settings ----
+MAX_EMPTY_SQUARES = 20  # Limit empty squares (most are redundant, focus on pieces)
+
 # Define piece classes
 CLASSES = ['empty', 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k']
 CLASS_NAMES = {
@@ -43,14 +46,21 @@ if not positions:
 
 print(f"Found {len(positions)} captured positions")
 print("\n=== Square Labeling Tool ===")
+print(f"\nEmpty squares are auto-skipped after {MAX_EMPTY_SQUARES} are collected (we have enough for verification)")
+print("Focus on labeling PIECES - they're more important for accuracy!")
 print("\nFor each image, enter the piece label:")
 for cls in CLASSES:
-    print(f"  {cls:6s} = {CLASS_NAMES[cls]}")
-print("\nOr press 's' to skip, 'exit' to quit")
+    if cls != 'empty':
+        print(f"  {cls:6s} = {CLASS_NAMES[cls]}")
+print("\nOr:")
+print("  '0' = Force label as EMPTY (for verification)")
+print("  's' = Skip this square")
+print("  'exit' = Quit")
 print("\n" + "="*60 + "\n")
 
 labeled_count = 0
 skipped_count = 0
+empty_count = 0
 
 for position in positions:
     print(f"\nProcessing position: {position.name}")
@@ -80,19 +90,26 @@ for position in positions:
             if label == 'exit':
                 print("\nQuitting...")
                 print(f"\nLabeled: {labeled_count}, Skipped: {skipped_count}")
-
                 exit()
             
             if label == 's':
                 skipped_count += 1
                 break
             
-            if label == 'empty':
-                dest = output_dir / 'empty' / f"{position.name}_{square_file.name}"
-                shutil.copy2(square_file, dest)
-                labeled_count += 1
-                print(f"  ✓ empty")
-                break
+            # Handle empty squares
+            if label == 'empty' or label == '0':
+                # Auto-skip empty if we have enough already
+                if empty_count >= MAX_EMPTY_SQUARES and label == 'empty':
+                    print(f"  ⊘ Skipped (already have {MAX_EMPTY_SQUARES} empty squares)")
+                    skipped_count += 1
+                    break
+                else:
+                    dest = output_dir / 'empty' / f"{position.name}_{square_file.name}"
+                    shutil.copy2(square_file, dest)
+                    labeled_count += 1
+                    empty_count += 1
+                    print(f"  ✓ empty ({empty_count}/{MAX_EMPTY_SQUARES})")
+                    break
             
             # Check if it's a valid piece type (case-insensitive)
             piece_type = label.lower()
@@ -113,17 +130,22 @@ for position in positions:
                 print(f"  ✓ {final_label}")
                 break
             else:
-                print(f"  Invalid. Use: p/n/b/r/q/k, empty, s, or 'exit'")
+                print(f"  Invalid. Use: p/n/b/r/q/k, '0' (for empty), 's' (skip), or 'exit'")
         
 print("\n" + "="*60)
 print(f"\nLabeling complete!")
-print(f"  Labeled: {labeled_count}")
+print(f"  Total labeled: {labeled_count}")
+print(f"  Empty squares: {empty_count}/{MAX_EMPTY_SQUARES}")
 print(f"  Skipped: {skipped_count}")
 print(f"\nOrganized dataset saved to: {output_dir}/")
 print("\nClass distribution:")
 for cls in CLASSES:
     count = len(list((output_dir / cls).glob('*.jpg')))
     if count > 0:
-        print(f"  {cls:6s} ({CLASS_NAMES[cls]:15s}): {count:4d} images")
+        status = ""
+        if cls == 'empty':
+            status = f" (limited to {MAX_EMPTY_SQUARES})"
+        print(f"  {cls:6s} ({CLASS_NAMES[cls]:15s}): {count:4d} images{status}")
 
-print("\nNext step: python train_classifier.py")
+print("\n✓ Ready to train!")
+print("Next step: python train_classifier.py")

@@ -12,10 +12,10 @@ BOARD_PIX = 800
 DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 ID_TL, ID_TR, ID_BR, ID_BL = 0, 1, 2, 3
 
-# Same settings as board_to_fen
-EDGE_THRESHOLD = 180
-DIFF_THRESHOLD = 20
-DIFF_PIXELS = 500
+# Same settings as board_to_fen - optimized for background subtraction
+EDGE_THRESHOLD = 800
+DIFF_THRESHOLD = 30
+DIFF_PIXELS = 1200  # Increased for corner false positive elimination
 CENTER_CROP = 0.75
 
 DST = np.array([
@@ -106,6 +106,10 @@ def extract_squares(board_warp):
     return squares
 
 def detect_occupancy(squares, empty_ref=None):
+    """
+    Occupancy detection with background subtraction as primary method.
+    Background subtraction handles same-colored squares much better than edge detection.
+    """
     occupied = []
     for row in range(8):
         row_occupied = []
@@ -122,19 +126,39 @@ def detect_occupancy(squares, empty_ref=None):
             square_center = square[y0:y1, x0:x1]
             
             if empty_ref is not None:
-                # Use background subtraction if we have empty board reference
+                # PRIMARY: Background subtraction (most reliable, handles same-colored squares)
                 ref_square = empty_ref[row][col]
                 ref_center = ref_square[y0:y1, x0:x1]
                 diff = cv2.absdiff(square_center, ref_center)
                 gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+                
+                # Bilateral filtering - reduces noise better than Gaussian while preserving edges
+                gray_diff = cv2.bilateralFilter(gray_diff, 5, 20, 20)
+                
                 _, thresh = cv2.threshold(gray_diff, DIFF_THRESHOLD, 255, cv2.THRESH_BINARY)
+                
+                # Morphological cleanup - remove small noise (multiple iterations for aggressive cleaning)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+                
                 occupied_pixels = cv2.countNonZero(thresh)
                 is_occupied = occupied_pixels > DIFF_PIXELS
             else:
-                # Fall back to edge density method
+                # FALLBACK: Edge detection (no reference available)
                 gray = cv2.cvtColor(square_center, cv2.COLOR_BGR2GRAY)
-                edges = cv2.Canny(gray, 50, 150)
-                edge_pixels = cv2.countNonZero(edges)
+                
+                # Morphological opening to reduce noise
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                gray_opened = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
+                
+                # Edge detection with stricter thresholds
+                edges = cv2.Canny(gray_opened, 100, 200)
+                
+                # Dilate edges slightly to connect nearby edge fragments
+                kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+                edges_dilated = cv2.dilate(edges, kernel_dilate, iterations=1)
+                
+                edge_pixels = cv2.countNonZero(edges_dilated)
                 is_occupied = edge_pixels > EDGE_THRESHOLD
             
             row_occupied.append(is_occupied)
