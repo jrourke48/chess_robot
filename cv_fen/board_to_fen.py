@@ -28,10 +28,15 @@ BOARD_PIX = 800  # output warp size (800x800)
 DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 
 # Occupancy tuning - optimized for background subtraction + edge detection fallback
-EDGE_THRESHOLD = 800  # Very high threshold - only use when no reference available
+EDGE_THRESHOLD = 1500  # Higher threshold reduces false positives from texture/shadows
 DIFF_THRESHOLD = 30   # Sensitive for piece detection (background subtraction is very reliable)
 DIFF_PIXELS = 1200    # Increased to eliminate corner shadow false positives
 CENTER_CROP = 0.75    # Good center focus
+
+TYPE_CONFIDENCE_THRESHOLD = 0.45
+COLOR_CONFIDENCE_THRESHOLD = 0.80
+COLOR_MARGIN_THRESHOLD = 0.25
+USE_ML_COLOR = False  # Current color head overfits; keep deterministic color by default.
 
 # ArUco marker IDs for corners (TOP-LEFT, TOP-RIGHT, BOTTOM-RIGHT, BOTTOM-LEFT)
 ID_TL, ID_TR, ID_BR, ID_BL = 0, 1, 2, 3
@@ -328,8 +333,7 @@ def classify_pieces(squares, occupied, classifier=None):
                     # Use real classifier
                     piece = classify_piece_with_model(square, classifier)
                 else:
-                    # Placeholder: random piece for testing
-                    piece = 'P'  # Replace with actual classification
+                    piece = _brightness_color_fallback(square)
                 
                 row_pieces.append(piece)
         
@@ -338,32 +342,104 @@ def classify_pieces(squares, occupied, classifier=None):
     return board
 
 
+def _prepare_square_for_model(square_img, metadata):
+    """Apply the same center crop and preprocessing used in training."""
+    crop_fraction = float(metadata.get('center_crop', 1.0))
+    img_size = int(metadata.get('img_size', 64))
+
+    h, w = square_img.shape[:2]
+    crop_h = max(1, int(h * crop_fraction))
+    crop_w = max(1, int(w * crop_fraction))
+    y0 = max(0, (h - crop_h) // 2)
+    x0 = max(0, (w - crop_w) // 2)
+    cropped = square_img[y0:y0 + crop_h, x0:x0 + crop_w]
+
+    resized = cv2.resize(cropped, (img_size, img_size), interpolation=cv2.INTER_AREA)
+
+    preprocessing = metadata.get('preprocessing')
+    if preprocessing == 'mobilenet_v2':
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB).astype(np.float32)
+        processed = tf.keras.applications.mobilenet_v2.preprocess_input(rgb)
+    else:
+        processed = resized.astype(np.float32) / 255.0
+
+    return np.expand_dims(processed, axis=0)
+
+
+def _brightness_color_fallback(square_img):
+    """Fallback white/black guess based on square-center brightness."""
+    gray = cv2.cvtColor(square_img, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape[:2]
+    crop_h = max(1, int(h * 0.6))
+    crop_w = max(1, int(w * 0.6))
+    y0 = max(0, (h - crop_h) // 2)
+    x0 = max(0, (w - crop_w) // 2)
+    center = gray[y0:y0 + crop_h, x0:x0 + crop_w]
+
+    p90 = np.percentile(center, 90)
+    p10 = np.percentile(center, 10)
+    mean_val = float(np.mean(center))
+
+    if p90 >= 155:
+        return 'P'
+    if p10 <= 70:
+        return 'p'
+    return 'P' if mean_val >= 120 else 'p'
+
+
+def _extract_multitask_predictions(prediction):
+    if isinstance(prediction, dict):
+        return prediction['piece_type'], prediction['piece_color']
+    if isinstance(prediction, (list, tuple)) and len(prediction) == 2:
+        return prediction[0], prediction[1]
+    raise ValueError('Unexpected multitask prediction format')
+
+
 def classify_piece_with_model(square_img, classifier_data):
     """
     Classify a single square using the trained model
     """
-    model, class_mapping = classifier_data
-    
-    # Resize to model input size
-    square_resized = cv2.resize(square_img, (64, 64))
-    
-    # Normalize to [0, 1]
-    square_normalized = square_resized.astype(np.float32) / 255.0
-    
-    # Add batch dimension
-    square_batch = np.expand_dims(square_normalized, axis=0)
-    
-    # Predict
+    model, metadata = classifier_data
+
+    if metadata.get('model_kind') == 'piece_type_color_multitask_v1':
+        square_batch = _prepare_square_for_model(square_img, metadata)
+        prediction = model.predict(square_batch, verbose=0)
+        type_probs, color_probs = _extract_multitask_predictions(prediction)
+
+        type_probs = type_probs[0]
+        color_probs = color_probs[0]
+        type_idx = int(np.argmax(type_probs))
+        color_idx = int(np.argmax(color_probs))
+        type_conf = float(type_probs[type_idx])
+        color_conf = float(color_probs[color_idx])
+        sorted_color = np.sort(color_probs)
+        color_margin = float(sorted_color[-1] - sorted_color[-2]) if len(sorted_color) > 1 else 1.0
+
+        piece_type = metadata['piece_types'][type_idx]
+        if type_conf < TYPE_CONFIDENCE_THRESHOLD:
+            # Keep top-1 type prediction but demand higher confidence for color.
+            piece_type = metadata['piece_types'][type_idx]
+
+        heuristic_is_white = _brightness_color_fallback(square_img).isupper()
+
+        if (
+            USE_ML_COLOR
+            and color_conf >= COLOR_CONFIDENCE_THRESHOLD
+            and color_margin >= COLOR_MARGIN_THRESHOLD
+        ):
+            color_name = metadata['color_classes'][color_idx]
+            is_white = color_name == 'white'
+        else:
+            is_white = heuristic_is_white
+
+        return piece_type if is_white else piece_type.lower()
+
+    square_batch = _prepare_square_for_model(square_img, metadata)
     prediction = model.predict(square_batch, verbose=0)
-    piece_idx = np.argmax(prediction)
-    
-    # Map to FEN character
-    piece = class_mapping[str(piece_idx)]
-    
-    # Return None for empty squares
+    piece_idx = int(np.argmax(prediction))
+    piece = metadata[str(piece_idx)]
     if piece == 'empty':
         return None
-    
     return piece
 
 
@@ -482,24 +558,30 @@ def main():
     
     # Try to load trained classifier
     classifier = None
-    if HAS_TENSORFLOW and os.path.exists('piece_classifier.h5'):
+    model_path = None
+    if os.path.exists('piece_classifier.keras'):
+        model_path = 'piece_classifier.keras'
+    elif os.path.exists('piece_classifier.h5'):
+        model_path = 'piece_classifier.h5'
+
+    if HAS_TENSORFLOW and model_path is not None:
         print("\nLoading trained piece classifier...")
         try:
-            model = tf.keras.models.load_model('piece_classifier.h5')
+            model = tf.keras.models.load_model(model_path)
             with open('piece_classifier_classes.json', 'r') as f:
-                class_mapping = json.load(f)
-            classifier = (model, class_mapping)
-            print("✓ Classifier loaded successfully")
+                metadata = json.load(f)
+            classifier = (model, metadata)
+            print(f"✓ Classifier loaded successfully from {model_path}")
         except Exception as e:
             print(f"Warning: Could not load classifier: {e}")
-            print("Will use placeholder classification")
+            print("Will use brightness fallback classification")
     else:
         if not HAS_TENSORFLOW:
             print("\nTensorFlow not available - cannot use classifier")
         else:
-            print("\nNo trained classifier found (piece_classifier.h5)")
+            print("\nNo trained classifier found (piece_classifier.keras or piece_classifier.h5)")
             print("Run train_classifier.py to train a model first")
-        print("Will use placeholder classification (all pieces = 'P')")
+        print("Will use brightness fallback classification")
     
     print("\nOptions:")
     print("1. Capture empty board reference (recommended)")
@@ -528,7 +610,7 @@ def main():
     frame_count = 0
     try:
         while True:
-            fen, warped, debug = process_frame(empty_board_ref)
+            fen, warped, debug = process_frame(empty_board_ref, classifier)
             
             if fen is not None:
                 # Update tracker
