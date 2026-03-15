@@ -4,8 +4,8 @@ import time
 PORT = "COM3"       # <-- change to your BusLinker COM port
 BAUD = 115200
 
-OLD_ID = 15
-NEW_ID = 15         # <-- your requested ID
+OLD_ID = 128
+NEW_ID = 4         # <-- your requested ID
 
 CMD_ID_WRITE = 0x0D  # SERVO_ID_WRITE
 HEADER = b"\x55\x55"

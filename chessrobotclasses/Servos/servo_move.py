@@ -16,7 +16,7 @@ SHOULDERLIMITS_HX_65HM = ServoLimits(min_angle=0, max_angle=4095)
 SHOULDERLIMITS_HX_35HM = ServoLimits(pos_max=1000, min_angle=120, max_angle=880)
 
 
-def test_35_series(port: str = "COM4", baudrate: int = 115200):
+def test_35_series(port: str = "COM3", baudrate: int = 115200):
     """Test 35-series (0x55 protocol) servos."""
     print("\n" + "="*60)
     print("Testing 35-Series Servos (0x55 Protocol)")
@@ -27,7 +27,7 @@ def test_35_series(port: str = "COM4", baudrate: int = 115200):
         driver = Hiwonder55Servo(ser)
         
         # Wrap in BusServo objects
-        servos = [BusServo(driver, 15, SHOULDERLIMITS_HX_35HM, f"35_Servo_15")]
+        servos = [BusServo(driver, 15, SHOULDERLIMITS_HX_35HM, f"35_Servo_80")]
         
         # Test each servo
         for servo in servos:
@@ -42,7 +42,7 @@ def test_35_series(port: str = "COM4", baudrate: int = 115200):
             
             # Move servo
             print(f"Moving {servo.name} to position 0 in 50ms...")
-            servo.move(000, 50)
+            #servo.move(000, 50)
             time.sleep(1.5)
             
             # Read final position
