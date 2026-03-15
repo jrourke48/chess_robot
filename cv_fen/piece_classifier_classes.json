@@ -1,15 +1,96 @@
 {
-  "0": "empty",
-  "1": "P",
-  "2": "N",
-  "3": "B",
-  "4": "R",
-  "5": "Q",
-  "6": "K",
-  "7": "p",
-  "8": "n",
-  "9": "b",
-  "10": "r",
-  "11": "q",
-  "12": "k"
+  "model_kind": "piece_type_color_multitask_v1",
+  "img_size": 160,
+  "center_crop": 0.82,
+  "preprocessing": "mobilenet_v2",
+  "piece_types": [
+    "P",
+    "N",
+    "B",
+    "R",
+    "Q",
+    "K"
+  ],
+  "color_classes": [
+    "black",
+    "white"
+  ],
+  "class_specs": [
+    [
+      "P",
+      "P",
+      "white"
+    ],
+    [
+      "N",
+      "N",
+      "white"
+    ],
+    [
+      "B",
+      "B",
+      "white"
+    ],
+    [
+      "R",
+      "R",
+      "white"
+    ],
+    [
+      "Q",
+      "Q",
+      "white"
+    ],
+    [
+      "K",
+      "K",
+      "white"
+    ],
+    [
+      "p",
+      "black_p",
+      "black"
+    ],
+    [
+      "n",
+      "black_n",
+      "black"
+    ],
+    [
+      "b",
+      "black_b",
+      "black"
+    ],
+    [
+      "r",
+      "black_r",
+      "black"
+    ],
+    [
+      "q",
+      "black_q",
+      "black"
+    ],
+    [
+      "k",
+      "black_k",
+      "black"
+    ]
+  ],
+  "color_confidence_recommended": 0.8,
+  "type_confidence_recommended": 0.5,
+  "class_weights": {
+    "piece_type": {
+      "0": 0.4316816816816817,
+      "1": 1.2286324786324787,
+      "2": 1.1979166666666667,
+      "3": 1.2286324786324787,
+      "4": 1.183127572016461,
+      "5": 2.662037037037037
+    },
+    "piece_color": {
+      "0": 1.0052447552447552,
+      "1": 0.9948096885813149
+    }
+  }
 }
