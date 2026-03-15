@@ -559,7 +559,9 @@ def main():
     # Try to load trained classifier
     classifier = None
     model_path = None
-    if os.path.exists('piece_classifier.keras'):
+    if os.path.exists('piece_classifier_best.keras'):
+        model_path = 'piece_classifier_best.keras'
+    elif os.path.exists('piece_classifier.keras'):
         model_path = 'piece_classifier.keras'
     elif os.path.exists('piece_classifier.h5'):
         model_path = 'piece_classifier.h5'
