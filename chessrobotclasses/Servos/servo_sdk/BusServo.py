@@ -69,6 +69,17 @@ class BusServo:
         # Example conversion, adjust based on servo type
         return int(radian * (self.max_pos - self.min_pos) / (2 * 3.141592 * self.range / 360) + self.offset)
 
+    def raw_number2radian(self, raw: int) -> float:
+        """
+        Convert raw servo units to radians.
+        
+        Args:
+            raw: Raw servo units
+            
+        Returns:
+            Angle in radians
+        """
+        return (raw - self.offset) * (2 * 3.141592 * self.range / 360) / (self.max_pos - self.min_pos)
     def motor_on(self) -> int:
         """Enable motor torque output."""
         return self.driver.Motor_on(self.id, True)
@@ -95,10 +106,10 @@ class BusServo:
         # Convert radians to raw servo units
         raw_position = self.radian2raw_number(position)
         # Clamp positions to the servo's limits
-        if raw_position > self.max_pos:
-            raw_position = self.max_pos
-        elif raw_position < self.min_pos:
-            raw_position = self.min_pos
+        if raw_position > self.max_angle:
+            raw_position = self.max_angle
+        elif raw_position < self.min_angle:
+            raw_position = self.min_angle
         return self.driver.move_time(self.id, raw_position, time_ms)
     
     # =========================================================================
@@ -135,14 +146,17 @@ class BusServo:
     # Reading Sensor Data
     # =========================================================================
 
-    def read_position(self) -> Tuple[int, bool]:
+    def read_position(self) -> float:
         """
         Read current position.
         
         Returns:
             (position, ok) - position value and success flag
         """
-        return self.driver.pos_read(self.id)
+        raw_position, ok = self.driver.pos_read(self.id)
+        if not ok:
+            return None
+        return self.raw_number2radian(raw_position)
 
     def read_temperature(self) -> Tuple[int, bool]:
         """

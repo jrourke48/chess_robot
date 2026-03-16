@@ -21,6 +21,13 @@ class ServoLimits:
     motor_speed_min: int = -1000
     motor_speed_max: int = 1000
 
+    def set_offset(self, new_offset: int) -> None:
+        """Set the servo offset during calibration"""
+        self.offset = new_offset
+        #center the range around the offset
+        self.min_angle = self.offset - self.range // 2
+        self.max_angle = self.offset + self.range // 2
+
 # Conservative presets (tune as needed)
 WRISTLIMITS_HX_10HM = ServoLimits(min_angle=1200, max_angle=3600)
 ELBOWLIMITS_HX_35HM = ServoLimits(pos_max=1000, min_angle=500, max_angle=1000)

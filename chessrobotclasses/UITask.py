@@ -32,6 +32,8 @@ class UITaskFSM:
         self.ready2move = events["ready2move"]
         self.move_completed = events["move_completed"]
         self.use_cv = events["use_cv"]
+        self.calibrate_servos = events["calibrate_servos"]
+        self.calibrate_servos2 = events["calibrate_servos2"]
 
         self.chess_board = chess_board
         self.motion_planner = motion_planner
@@ -41,9 +43,15 @@ class UITaskFSM:
         self.WAIT4ROBOTTURN = 1
         self.CVALGO = 2
         self.ROBOTTURN = 3
+        self.CALIBRATE_SERVOS = 4
+        self.CALIBRATE_SERVOS2 = 5
         self.state = self.WAIT4GAME
 
     async def state_wait4game(self):
+        # Check if calibration was requested (has priority over game start)
+        if self.calibrate_servos.is_set():
+            return self.CALIBRATE_SERVOS
+        
         await self.begin_game.wait()
         print("UI task started.")
         return self.WAIT4ROBOTTURN
@@ -93,7 +101,24 @@ class UITaskFSM:
         await self.move_completed.wait()
         self.move_completed.clear()
         return self.WAIT4ROBOTTURN
-
+    async def state_calibrate_servos(self):
+        """Stage 1: Initiate calibration - move servos to known position"""
+        await self.calibrate_servos.wait()
+        # Signal that calibration stage 1 was initiated
+        await self.update_ui_boardstate.put("CALIBRATION_STAGE_1_INITIATED")
+        print("Calibration Stage 1: Servos moved to calibration position. Waiting for stage 2...")
+        return self.CALIBRATE_SERVOS2
+    
+    async def state_calibrate_servos2(self):
+        """Stage 2: Confirm calibration position and set offsets"""
+        await self.calibrate_servos2.wait()
+        # Signal that calibration stage 2 was completed
+        await self.update_ui_boardstate.put("CALIBRATION_STAGE_2_COMPLETE")
+        print("Calibration Stage 2: Offsets confirmed. Returning to game.")
+        self.calibrate_servos.clear()
+        self.calibrate_servos2.clear()
+        return self.WAIT4GAME
+    
     async def run(self):
         """Main state machine loop."""
         while True:
@@ -105,6 +130,10 @@ class UITaskFSM:
                 self.state = await self.state_cvalgo()
             elif self.state == self.ROBOTTURN:
                 self.state = await self.state_robotturn()
+            elif self.state == self.CALIBRATE_SERVOS:
+                self.state = await self.state_calibrate_servos()
+            elif self.state == self.CALIBRATE_SERVOS2:
+                self.state = await self.state_calibrate_servos2()
             else:
                 print(f"Unknown UI state: {self.state}, returning to WAIT4GAME")
                 self.state = self.WAIT4GAME
@@ -344,6 +373,22 @@ async def ws_endpoint(ws: WebSocket):
                 events["ready2move"].set()  # Trigger the CPU task to check for winner
                 await ws_log(ws, "You resigned. Robot wins!", "success")
                 await ws_send(ws, {"type": "winner", "winner": "black", "reason": "resignation"})
+            
+            elif mtype == "calibrate_stage1":
+                if session.game_started:
+                    await ws_log(ws, "Cannot calibrate during an active game.", "error")
+                    continue
+                events["calibrate_servos"].set()
+                await ws_log(ws, "Calibration Stage 1: Moving servos to calibration position...", "success")
+                await ws_send(ws, {"type": "calibration", "stage": 1, "status": "initiated"})
+            
+            elif mtype == "calibrate_stage2":
+                if session.game_started:
+                    await ws_log(ws, "Cannot calibrate during an active game.", "error")
+                    continue
+                events["calibrate_servos2"].set()
+                await ws_log(ws, "Calibration Stage 2: Confirming offset positions...", "success")
+                await ws_send(ws, {"type": "calibration", "stage": 2, "status": "completed"})
 
             else:
                 await ws_log(ws, f"Unknown message type: {mtype}", level="warn")
@@ -404,6 +449,10 @@ def index():
             color: #fff;
             border-radius: 8px;
             cursor: pointer;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         button.secondary {
             background: #fff;
@@ -479,6 +528,11 @@ def index():
 
                 <button class="secondary" onclick="moveOverClicked()">My Move Is Over</button>
                 <button class="secondary" style="background: #dc2626; border-color: #dc2626; color: #fff;" onclick="resignGame()">Resign</button>
+                
+                <hr style="margin: 12px 0; border: none; border-top: 1px solid #e5e7eb;">
+                <h3 style="margin-top: 0;">Servo Calibration</h3>
+                <button id="calibrateBtn1" class="secondary" style="background: #3b82f6; border-color: #3b82f6; color: #fff;" onclick="calibrateStage1()">Stage 1: Init Calibration</button>
+                <button id="calibrateBtn2" class="secondary" style="background: #8b5cf6; border-color: #8b5cf6; color: #fff;" onclick="calibrateStage2()">Stage 2: Confirm Offsets</button>
             </div>
 
             <h3>Session</h3>
@@ -557,8 +611,22 @@ def index():
             }
         }
 
+        function calibrateStage1() {
+            ws.send(JSON.stringify({ type: "calibrate_stage1" }));
+        }
+
+        function calibrateStage2() {
+            ws.send(JSON.stringify({ type: "calibrate_stage2" }));
+        }
+
+        function updateCalibrationButtonState(gameStarted) {
+            document.getElementById("calibrateBtn1").disabled = gameStarted;
+            document.getElementById("calibrateBtn2").disabled = gameStarted;
+        }
+
         ws.onopen = () => {
             addLog("Connected", "success");
+            updateCalibrationButtonState(false);  // Enable calibration buttons on connect
             ws.send(JSON.stringify({ type: "get_board" }));
         };
 
@@ -575,6 +643,7 @@ def index():
                 setPill("cvPill", `cv: ${msg.use_cv ? "on" : "off"}`);
                 document.getElementById("useCv").checked = !!msg.use_cv;
                 document.getElementById("manualMoveSection").style.display = msg.use_cv ? "none" : "block";
+                updateCalibrationButtonState(msg.game_started);
                 return;
             }
 
@@ -619,6 +688,15 @@ def index():
                 document.getElementById("boardPlot").src = msg.board_plot;
                 document.getElementById("trajPlot").src = msg.traj_plot;
                 addLog("Updated plots", "success");
+                return;
+            }
+
+            if (msg.type === "calibration") {
+                const stage = msg.stage;
+                const status = msg.status;
+                const statusText = status === "initiated" ? "initiated - check robot position" : "completed - offsets confirmed";
+                addLog(`Calibration Stage ${stage}: ${statusText}`, "success");
+                setPill("statusPill", `state: calibration stage ${stage}`);
                 return;
             }
         };

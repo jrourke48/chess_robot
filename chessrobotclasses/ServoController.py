@@ -8,7 +8,7 @@ from Servos.servo_sdk.Servo_models import ServoLimits
 # Conservative presets (tune as needed)
 WRISTLIMITS_HX_10HM = ServoLimits(min_angle=1200, max_angle=3600)
 ELBOWLIMITS_HX_35HM = ServoLimits(pos_max=1000, min_angle=500, max_angle=1000)
-SHOULDERLIMITS_HX_65HM = ServoLimits(min_angle=0, max_angle=4095)
+SHOULDERLIMITS_HX_65HM = ServoLimits(min_angle=500, max_angle=2200)
 SHOULDERLIMITS_HX_35HM = ServoLimits(pos_max=1000, min_angle=120, max_angle=880)
 
 class ServoController:
@@ -58,6 +58,17 @@ class ServoController:
     def print_servo_positions(self):
         for servo in self.Servo_Motors:
             print(f"{servo.name} position: {servo.read_position()}")
+    #get the position of all the servos as a list of four values representing the current position of each servo.
+    def get_servo_positions(self):
+        positions = []
+        for servo in self.Servo_Motors:
+            positions.append(servo.read_position())
+        return positions
+    #set the servo offsets during calibration, with a list of four values representing the desired offset for each servo.
+    def set_servo_offsets(self):
+        """Set absolute offset values for each servo during calibration"""
+        for servo in self.Servo_Motors:
+            servo.limits.set_offset(servo.read_position())
     #==================================
     #individual servo control methods
     #==================================

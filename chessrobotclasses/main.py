@@ -88,6 +88,8 @@ def main():
     move_completed = asyncio.Event()  # Event to signal that the robot has completed its move 
     servo_mode = asyncio.Event()  # Event to signal when to switch the servo control mode
     valid_move = asyncio.Event()  # Event to signal that the detected move has been validated and parsed successfully
+    calibrate_servos = asyncio.Event() # Event to signal when to run the servo calibration routine, which involves setting the servo offsets for each servo based on the current position of the robot arm
+    calibrate_servos2 = asyncio.Event() # Event to signal when to run the second part of the servo calibration routine, which involves moving each servo to its min and max angles to verify the limits and adjust as needed   
     #########################################################
     #queues to hold data that needs to be passed between tasks
     winner = asyncio.Queue() # Queue for the winner of the game,
@@ -118,6 +120,16 @@ def main():
             #send the joint angle commands to the robot's servo controller to execute the move
             print(f"Updating servo positions to: {current_thetas}")
             servo_controller.update_servo_positions(current_thetas)
+            await calibrate_servos.wait()  # Wait for the signal to start servo calibration
+            await calibrate_servos2.wait()  # Wait for the signal to start the second part of servo calibration
+            # After receiving the signal to calibrate, we can set the servo offsets based on the current position of the robot arm
+            servo_controller.set_servo_offsets()
+            #then we move the servos to the home configuration and reset the offsets based on the new readings to verify the limits and adjust as needed
+            home_thetas = [150, 150, 150, 150]  # Example home position, adjust as needed
+            servo_controller.update_servo_positions(home_thetas)
+            # After moving to the home position, we can set the servo offsets again to finalize the calibration
+            await asyncio.sleep(2)  # Wait for the servos to reach the home position
+            servo_controller.set_servo_offsets()
     
     async def cv_task():
         classifier = board_to_fen.load_trained_classifier()
@@ -201,6 +213,8 @@ def main():
         'move_completed': move_completed,
         'valid_move': valid_move,
         'use_cv': use_cv,
+        'calibrate_servos': calibrate_servos,
+        'calibrate_servos2': calibrate_servos2,
     }
     init_ui_runtime(ui_queues, ui_events, chess_board, motion_planner)
 
