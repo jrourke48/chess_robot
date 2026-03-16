@@ -611,9 +611,30 @@ def main():
     print("=== ArUco Chess Board to FEN Pipeline ===")
     
     # Try to load trained classifier
-    print("\nLoading trained piece classifier...")
-    classifier = load_trained_classifier()
-    if classifier is None:
+    classifier = None
+    model_path = None
+    if os.path.exists('piece_classifier.keras'):
+        model_path = 'piece_classifier.keras'
+    elif os.path.exists('piece_classifier.h5'):
+        model_path = 'piece_classifier.h5'
+
+    if HAS_TENSORFLOW and model_path is not None:
+        print("\nLoading trained piece classifier...")
+        try:
+            model = tf.keras.models.load_model(model_path)
+            with open('piece_classifier_classes.json', 'r') as f:
+                metadata = json.load(f)
+            classifier = (model, metadata)
+            print(f"✓ Classifier loaded successfully from {model_path}")
+        except Exception as e:
+            print(f"Warning: Could not load classifier: {e}")
+            print("Will use brightness fallback classification")
+    else:
+        if not HAS_TENSORFLOW:
+            print("\nTensorFlow not available - cannot use classifier")
+        else:
+            print("\nNo trained classifier found (piece_classifier.keras or piece_classifier.h5)")
+            print("Run train_classifier.py to train a model first")
         print("Will use brightness fallback classification")
     
     print("\nOptions:")
