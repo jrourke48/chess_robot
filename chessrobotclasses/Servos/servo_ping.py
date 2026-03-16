@@ -2,7 +2,7 @@ import serial
 import time
 
 PORT = "COM3"      # change to your port
-BAUD = 1000000     # try 1000000 first
+BAUD = 115200     # try 1000000 first
 
 ser = serial.Serial(PORT, BAUD, timeout=0.1)
 

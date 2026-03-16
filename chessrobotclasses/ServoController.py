@@ -27,17 +27,17 @@ class ServoController:
         driver55 = Hiwonder55Servo(ser55)
         driverff = HiwonderFFServo(serff)
         # Wrap in BusServo objects
-        self.Wrist_servo = BusServo(driverff, 5, SHOULDERLIMITS_HX_65HM, f"65_Servo_5")
-        self.Elbow_servo = BusServo(driver55, 15, ELBOWLIMITS_HX_35HM, f"35_Servo_15")
-        self.TiltShoulder_servo = BusServo(driverff, 23, SHOULDERLIMITS_HX_65HM, f"65_Servo_23")
-        self.PanShoulder_servo = BusServo(driver55, 30, SHOULDERLIMITS_HX_35HM, f"35_Servo_30")
+        self.Wrist_servo = BusServo(driverff, 4, WRISTLIMITS_HX_10HM, f"Wrist_Servo_4")
+        self.Elbow_servo = BusServo(driver55, 3, ELBOWLIMITS_HX_35HM, f"Elbow_Servo_3")
+        self.TiltShoulder_servo = BusServo(driverff, 2, SHOULDERLIMITS_HX_65HM, f"TiltShoulder_Servo_2")
+        self.PanShoulder_servo = BusServo(driver55, 1, SHOULDERLIMITS_HX_35HM, f"PanShoulder_Servo_1")
         # Store all servos in a list for easy iteration
         self.Servo_Motors = [self.Wrist_servo, self.Elbow_servo, self.TiltShoulder_servo, self.PanShoulder_servo]
 
     #update all the servo positions at once, with a list of four values representing the desired position for each servo.
     def update_servo_positions(self, position_vector: list):
         for i in range(4):
-            self.Servo_Motors[i].move(position_vector[i], 1000)
+            self.Servo_Motors[i].move(position_vector[i], 50)
     #turn on all the servos
     def turn_on_all(self):
         for servo in self.Servo_Motors:

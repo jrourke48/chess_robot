@@ -28,14 +28,17 @@ def chess_robot_inversekinematics(x, y, z):
     @return Tuple of 4 joint angles in radians (theta1, theta2, theta3, theta4).
     @throws ValueError If the target is unreachable for the assumed arm geometry.
     """
-    lux = 3.5  # base-to-shoulder length [in]
-    luy = 4.375 # base-to-shoulder length [in]
-    luz = 3.5  # base-to-shoulder length  [in]
-    l1 = 8.0   # shoulder-to-elbow length [in]
-    l2 = 7.0   # elbow-wrist length  [in]
+    lux = 4.535  # base-to-ah center x length [in]
+    luy = 4.375 # base-to-ah center y length [in]
+    luz = 3.71  # base-to-shoulder length  [in]
+    l1 = 8.720   # shoulder-to-elbow length [in]
+    l2 = 9.830   # elbow-wrist length  [in]
     l3 = 6.0   # manhattan x offset  [in]
     l4 = 13.0   # manhattan z offset [in]
-    lem = 1  # end-effector frame electromagnet z offset [in]
+    lem = 4.0  # end-effector frame electromagnet z offset [in]
+    lem2cam = 1.5  # electromagnet to camera z offset [in]
+    lcam = 13+3.71-4.0+1.5  # camera z to board offset [in]
+    
     #intermediate variables for geometric calculations
     int1 = l1**2 + l2**2 
     int2 = l3**2 + l4**2

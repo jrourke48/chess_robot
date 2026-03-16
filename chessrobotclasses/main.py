@@ -9,6 +9,7 @@ import chess
 import numpy as np
 import gpiozero
 
+from Electromagnet import Electromagnet
 from ServoController import ServoController
 from ChessStateValidatorMoveParser import ChessBoard
 from RobotMotionPlanner import RobotMotionPlanner
