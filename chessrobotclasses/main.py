@@ -9,6 +9,7 @@ import chess
 import numpy as np
 import gpiozero
 
+import cv_fen.board_to_fen as board_to_fen
 from Electromagnet import Electromagnet
 from ServoController import ServoController
 from ChessStateValidatorMoveParser import ChessBoard
@@ -78,6 +79,8 @@ def main():
     #events that represent flags for inter-task communication and synchronization
     begin_game = asyncio.Event()  # Event to signal the start of the game after initialization
     use_cv = asyncio.Event()  # Event to signal whether we will use CV or manual input for moves
+    ready4cv = asyncio.Event() # Event to signal when the system is ready for CV to detect the next move,
+    #updated by the endgame effector CPU task and read by the CV task to know when to run the CV detection for the next move
     ready2move = asyncio.Event()  # Event to signal that the opponents move is complete 
     #meaning the robot can process the current move and execute the next move
     emag_on = asyncio.Event()  # Event to signal when to turn on the electromagnet for piece manipulation
@@ -117,11 +120,29 @@ def main():
             servo_controller.update_servo_positions(current_thetas)
     
     async def cv_task():
+        classifier = board_to_fen.load_trained_classifier()
+        empty_board_ref = board_to_fen.load_empty_board_reference()
+
         while True:
+            await use_cv.wait()  # Wait until CV mode is enabled
             #run the computer vision system to detect the move 
             #put the detected move in the chessboard object to validate it and update the chess board state
-            await asyncio.sleep(0.1)  # Simulate CV processing delay
-    
+            await ready4cv.wait()  # Wait until the system is ready for CV to detect the next move
+            print("CV Task: Starting move detection...")
+
+            fen, _, debug = board_to_fen.detect_fen_once(
+                empty_board_ref=empty_board_ref,
+                classifier=classifier,
+            )
+
+            if fen is not None:
+                print(f"CV Task: Detected FEN: {fen}")
+                await detected_fen.put(fen)
+            else:
+                print(f"CV Task: Detection failed - {debug}")
+            await asyncio.sleep(0.1)
+
+
     async def endgameeffector_cpu_task():
         # Create queues and events dictionaries for FSM
         queues = {
@@ -137,6 +158,7 @@ def main():
             'ready2move': ready2move,
             'servo_mode': servo_mode,
             'use_cv': use_cv,
+            'ready4cv': ready4cv,
             'emag_on': emag_on,
             'emag_off': emag_off,
             'valid_move': valid_move,

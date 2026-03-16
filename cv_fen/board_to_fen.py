@@ -11,7 +11,10 @@ from collections import deque
 import sys
 import os
 import json
+import pickle
 sys.path.append('/home/jfrourke/chess_robot/chessboard2fen')
+
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Try to load TensorFlow
 try:
@@ -521,11 +524,62 @@ def process_frame(empty_board_ref=None, classifier=None):
     return fen, warped, debug_info
 
 
+def load_trained_classifier():
+    """Load classifier + metadata for external callers (returns None if unavailable)."""
+    if not HAS_TENSORFLOW:
+        print("TensorFlow not available - cannot use classifier")
+        return None
+
+    model_path = None
+    keras_path = os.path.join(MODULE_DIR, 'piece_classifier.keras')
+    h5_path = os.path.join(MODULE_DIR, 'piece_classifier.h5')
+    metadata_path = os.path.join(MODULE_DIR, 'piece_classifier_classes.json')
+
+    if os.path.exists(keras_path):
+        model_path = keras_path
+    elif os.path.exists(h5_path):
+        model_path = h5_path
+    else:
+        print("No trained classifier found (piece_classifier.keras or piece_classifier.h5)")
+        return None
+
+    if not os.path.exists(metadata_path):
+        print("Classifier metadata missing: piece_classifier_classes.json")
+        return None
+
+    try:
+        model = tf.keras.models.load_model(model_path)
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        print(f"Classifier loaded from {os.path.basename(model_path)}")
+        return (model, metadata)
+    except Exception as e:
+        print(f"Warning: Could not load classifier: {e}")
+        return None
+
+
+def load_empty_board_reference(path=None):
+    """Load empty-board reference if available, else return None."""
+    ref_path = path or os.path.join(MODULE_DIR, 'empty_board_ref.pkl')
+    if not os.path.exists(ref_path):
+        return None
+
+    try:
+        with open(ref_path, 'rb') as f:
+            return pickle.load(f)
+    except Exception as e:
+        print(f"Warning: Could not load empty board reference: {e}")
+        return None
+
+
+def detect_fen_once(empty_board_ref=None, classifier=None):
+    """One-shot callable API for external modules."""
+    return process_frame(empty_board_ref=empty_board_ref, classifier=classifier)
+
+
 # ===== Capture Empty Board Reference =====
 def capture_empty_board_reference():
     """Capture and store empty board for background subtraction"""
-    import pickle
-    
     print("Capturing empty board reference...")
     print("Make sure the board is EMPTY and press Enter")
     input()
@@ -542,7 +596,8 @@ def capture_empty_board_reference():
     empty_squares = extract_squares(warped_norm)
     
     # Save to disk
-    with open('empty_board_ref.pkl', 'wb') as f:
+    ref_path = os.path.join(MODULE_DIR, 'empty_board_ref.pkl')
+    with open(ref_path, 'wb') as f:
         pickle.dump(empty_squares, f)
     
     print("Empty board reference captured and saved!")
@@ -551,7 +606,6 @@ def capture_empty_board_reference():
 
 # ===== Main Loop =====
 def main():
-    import pickle
     import os
     
     print("=== ArUco Chess Board to FEN Pipeline ===")
@@ -559,9 +613,7 @@ def main():
     # Try to load trained classifier
     classifier = None
     model_path = None
-    if os.path.exists('piece_classifier_best.keras'):
-        model_path = 'piece_classifier_best.keras'
-    elif os.path.exists('piece_classifier.keras'):
+    if os.path.exists('piece_classifier.keras'):
         model_path = 'piece_classifier.keras'
     elif os.path.exists('piece_classifier.h5'):
         model_path = 'piece_classifier.h5'
@@ -597,10 +649,9 @@ def main():
         if empty_board_ref is None:
             print("Failed to capture reference. Exiting.")
             return
-    elif os.path.exists('empty_board_ref.pkl'):
+    elif os.path.exists(os.path.join(MODULE_DIR, 'empty_board_ref.pkl')):
         print("Loading saved empty board reference...")
-        with open('empty_board_ref.pkl', 'rb') as f:
-            empty_board_ref = pickle.load(f)
+        empty_board_ref = load_empty_board_reference()
         print("Loaded empty board reference from disk")
     
     # Initialize state tracker

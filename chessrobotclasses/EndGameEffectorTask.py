@@ -17,6 +17,7 @@ class EndgameEffectorFSM:
         self.servo_mode = events['servo_mode']
         self.ready2move = events['ready2move']
         self.use_cv = events['use_cv']
+        self.ready4cv = events['ready4cv']
         self.emag_on = events['emag_on']
         self.emag_off = events['emag_off']
         self.valid_move = events['valid_move']
@@ -55,6 +56,7 @@ class EndgameEffectorFSM:
         self.servo_mode.clear()
         self.emag_on.clear()
         self.emag_off.set()
+        self.ready4cv.clear()
         self.move_completed.set()  # Signal that the move has been completed
         # Reset waypoint tracking for next move
         self.cur_jwaypoint = None
@@ -93,16 +95,21 @@ class EndgameEffectorFSM:
     async def statewait4cv_algo(self):
         #check if we are using CV to detect moves
         if self.use_cv.is_set():
-            try:
-                self.current_detected_fen = await asyncio.wait_for(
-                    self.detected_fen.get(), 
-                    timeout=10.0  # 10 second timeout for CV
-                )
-                return self.VALIDATIONANDMOVERPARSER
-            except asyncio.TimeoutError:
-                print("CV timeout - no FEN detected")
-                self.backtowaitclearset()
+            if self.ready4cv.is_set():
+                try:
+                    self.current_detected_fen = await asyncio.wait_for(
+                        self.detected_fen.get(), 
+                        timeout=10.0  # 10 second timeout for CV
+                    )
+                    return self.VALIDATIONANDMOVERPARSER
+                except asyncio.TimeoutError:
+                    print("CV timeout - no FEN detected")
+                    self.backtowaitclearset()
+                    return self.WAIT4MOVE  # Go back to waiting for the next move
+            else:
+                await self.ready4cv.set()  # Signal that the system is ready for CV to detect the next move
                 return self.WAIT4CV_ALGO
+            
         else:
             return self.VALIDATIONANDMOVERPARSER
        
@@ -134,6 +141,7 @@ class EndgameEffectorFSM:
                 else:
                     self.valid_move.set()  # Signal that the move is valid and has been parsed
                     self.chess_waypoints = self.chess_board.waypoints
+                    self.ready4cv.clear()  # Clear the ready4cv event to wait for the next move
                     return self.CHESS2JOINTSPACE
         else:
             #if not using CV, just read the opponent move from the queue
