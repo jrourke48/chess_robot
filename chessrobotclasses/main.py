@@ -4,6 +4,7 @@
 """
 
 import asyncio
+from os import read
 import time
 import chess
 import numpy as np
@@ -67,12 +68,26 @@ def main():
         - manage the electromagnetic
         and limit switch and possible LEDS
     """
+    #ports for the servo controllers, adjust as needed based on your system configuration
+    port55 = "COM3"  # Serial port for 55-series servos (orange)
+    portff = "COM4"  # Serial port for FF-series servos (black)
     #initialize the chess board and robot motion planner
     chess_board = ChessBoard()
     motion_planner = RobotMotionPlanner()
-    servo_controller = ServoController()
-    #initialize low level hardware controllers
-    EMAG = Electromagnet(pin=17)
+    
+    #initialize servo controller (optional - will be None if ports unavailable)
+    servo_controller = None
+    try:
+        servo_controller = ServoController(port55, portff)
+    except Exception as e:
+        print(f"Warning: Could not initialize ServoController: {e}. Servo control will be skipped.")
+    
+    #initialize low level hardware controllers (optional)
+    EMAG = None
+    try:
+        EMAG = Electromagnet(pin=17)
+    except Exception as e:
+        print(f"Warning: Could not initialize Electromagnet: {e}. Electromagnet control will be skipped.")
     #########################################################
     #event and queue definitions for inter-task communication
     #########################################################
@@ -90,6 +105,7 @@ def main():
     valid_move = asyncio.Event()  # Event to signal that the detected move has been validated and parsed successfully
     calibrate_servos = asyncio.Event() # Event to signal when to run the servo calibration routine, which involves setting the servo offsets for each servo based on the current position of the robot arm
     calibrate_servos2 = asyncio.Event() # Event to signal when to run the second part of the servo calibration routine, which involves moving each servo to its min and max angles to verify the limits and adjust as needed   
+    kill_switch = asyncio.Event()  # Event to signal when to shut down all tasks and exit the program
     #########################################################
     #queues to hold data that needs to be passed between tasks
     winner = asyncio.Queue() # Queue for the winner of the game,
@@ -112,24 +128,43 @@ def main():
 
     #asyncio tasks
     async def servo_controller_task():
+        in_calibration_mode = False
         while True:
-            #wait for the servo mode event to be set, which signals that the robot should execute the next move
-            await servo_mode.wait()
-            #read the current joint angles from the theta_vector queue
-            current_thetas = await theta_vector.get()
-            #send the joint angle commands to the robot's servo controller to execute the move
-            print(f"Updating servo positions to: {current_thetas}")
-            servo_controller.update_servo_positions(current_thetas)
-            await calibrate_servos.wait()  # Wait for the signal to start servo calibration
-            await calibrate_servos2.wait()  # Wait for the signal to start the second part of servo calibration
-            # After receiving the signal to calibrate, we can set the servo offsets based on the current position of the robot arm
-            servo_controller.set_servo_offsets()
-            #then we move the servos to the home configuration and reset the offsets based on the new readings to verify the limits and adjust as needed
-            home_thetas = [150, 150, 150, 150]  # Example home position, adjust as needed
-            servo_controller.update_servo_positions(home_thetas)
-            # After moving to the home position, we can set the servo offsets again to finalize the calibration
-            await asyncio.sleep(2)  # Wait for the servos to reach the home position
-            servo_controller.set_servo_offsets()
+            # Check if calibration mode is requested
+            if calibrate_servos.is_set():
+                in_calibration_mode = True
+                print("Entering servo calibration mode...")
+                calibrate_servos.clear()
+            
+            # Main servo control
+            if not in_calibration_mode:
+                # Normal operation: wait for servo commands (with timeout to avoid blocking)
+                try:
+                    await asyncio.wait_for(servo_mode.wait(), timeout=0.01)
+                    current_thetas = await theta_vector.get()
+                    print(f"Updating servo positions to: {current_thetas}")
+                    if servo_controller is not None:
+                        servo_controller.update_servo_positions(current_thetas)
+                    else:
+                        print("  (Servo control not available - skipping)")
+                    servo_mode.clear()
+                except asyncio.TimeoutError:
+                    pass  # No servo command, continue
+            else:
+                # Calibration mode
+                if servo_controller is not None:
+                    servo_controller.set_servo_offsets()
+                    home_thetas = [150, 150, 150, 150]  # Example home position
+                    servo_controller.update_servo_positions(home_thetas)
+                    await asyncio.sleep(2)  # Wait for servos to move
+                    servo_controller.set_servo_offsets()
+                
+                if calibrate_servos2.is_set():
+                    print("Calibration complete.")
+                    calibrate_servos2.clear()
+                    in_calibration_mode = False
+            
+            await asyncio.sleep(0.01)  # Prevent busy-waiting
     
     async def cv_task():
         classifier = board_to_fen.load_trained_classifier()
@@ -190,12 +225,14 @@ def main():
         while True:
             await emag_on.wait()  # Wait for the signal to turn on the electromagnet
             print("Electromagnet ON for piece manipulation.")
-            EMAG.on()
+            if EMAG is not None:
+                EMAG.on()
             emag_on.clear()  # Reset for next use
             
             await emag_off.wait()  # Wait for the signal to turn off the electromagnet
             print("Electromagnet OFF after piece manipulation.")
-            EMAG.off()
+            if EMAG is not None:
+                EMAG.off()
             emag_off.clear()  # Reset for next use
 
 

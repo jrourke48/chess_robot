@@ -61,7 +61,7 @@ def test_35_series(port: str = "COM3", baudrate: int = 115200):
         traceback.print_exc()
 
 
-def test_65_series(port: str = "COM4", baudrate: int = 1000000):
+def test_65_series(port: str = "COM3", baudrate: int = 115200):
     """Test 65-series (0xFF protocol) servos."""
     print("\n" + "="*60)
     print("Testing 65-Series Servos (0xFF Protocol)")
@@ -72,7 +72,7 @@ def test_65_series(port: str = "COM4", baudrate: int = 1000000):
         driver = HiwonderFFServo(ser)
         
         # Wrap in BusServo objects
-        servos = [BusServo(driver, 1, SHOULDERLIMITS_HX_65HM, f"65_Servo_23")]
+        servos = [BusServo(driver, 4, WRISTLIMITS_HX_10HM, f"65_Servo_2")]
         
         # Test each servo
         for servo in servos:
@@ -87,7 +87,8 @@ def test_65_series(port: str = "COM4", baudrate: int = 1000000):
             
             # Move servo
             print(f"Moving {servo.name} to position 4000 in 100ms...")
-            #servo.move(0, 0)
+            #
+            #servo.move(2500, 1000)
             time.sleep(1.5)
             
             # Read final position
@@ -96,7 +97,7 @@ def test_65_series(port: str = "COM4", baudrate: int = 1000000):
             # Disable motor
             print(f"\nDisabling {servo.name}...")
             servo.motor_off()
-        
+
         ser.close()
         print("\n✓ 65-Series test complete")
         
@@ -109,7 +110,7 @@ def test_65_series(port: str = "COM4", baudrate: int = 1000000):
 def test_both_series():
     """Run both test suites."""
     test_35_series("COM3", 115200)
-    test_65_series("COM4", 115200)
+    test_65_series("COM3", 1000000)
 
 
 if __name__ == "__main__":

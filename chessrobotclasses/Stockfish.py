@@ -37,6 +37,7 @@ class Stockfish:
 
         candidates = []
         repo_root = Path(__file__).resolve().parent.parent
+        code_root = repo_root.parent  # One level up from chess_robot
 
         env_path = os.getenv("STOCKFISH_PATH")
         if env_path:
@@ -53,10 +54,12 @@ class Stockfish:
             "/opt/homebrew/bin/stockfish",
         ])
 
-        # Repo-local binaries as fallback
+        # Repo-local binaries as fallback (check both chess_robot and parent Code directory)
         candidates.extend([
             repo_root / "stockfishlinux" / "stockfish-ubuntu-x86-64-avx2",
             repo_root / "stockfishwindow" / "stockfish-windows-x86-64-avx2.exe",
+            code_root / "stockfish" / "stockfish-windows-x86-64-avx2.exe",
+            code_root / "stockfishwindow" / "stockfish-windows-x86-64-avx2.exe",
             "C:/Program Files/Stockfish/stockfish.exe",
             "C:/stockfish/stockfish.exe",
         ])

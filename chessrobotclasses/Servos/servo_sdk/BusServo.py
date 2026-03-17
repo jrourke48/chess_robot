@@ -92,7 +92,7 @@ class BusServo:
         """Stop motor movement."""
         return self.driver.move_stop(self.id)
 
-    def move(self, position: int, time_ms: int) -> int:
+    def move_rad(self, position: float, time_ms: int) -> int:
         """
         Move servo to position in specified time.
         
@@ -110,7 +110,26 @@ class BusServo:
             raw_position = self.max_angle
         elif raw_position < self.min_angle:
             raw_position = self.min_angle
+        print(f"{self.name}: Moving to {raw_position} (raw units)")
         return self.driver.move_time(self.id, raw_position, time_ms)
+    def move(self, position: int, time_ms: int) -> int:
+        """
+        Move servo to position in specified time.
+        
+        Args:
+            position: Target position in raw units
+            time_ms: Time to move in milliseconds
+            
+        Returns:
+            Bytes written to serial port
+        """
+        # Clamp positions to the servo's limits
+        if position > self.max_angle:
+            position = self.max_angle
+        elif position < self.min_angle:
+            position = self.min_angle
+        print(f"{self.name}: Moving to {position} (raw units)")
+        return self.driver.move_time(self.id, position, time_ms)
     
     # =========================================================================
     # Angle Offset and limits
@@ -146,9 +165,9 @@ class BusServo:
     # Reading Sensor Data
     # =========================================================================
 
-    def read_position(self) -> float:
+    def read_rad_position(self) -> float:
         """
-        Read current position.
+        Read current position in radians.
         
         Returns:
             (position, ok) - position value and success flag
@@ -157,7 +176,19 @@ class BusServo:
         if not ok:
             return None
         return self.raw_number2radian(raw_position)
-
+    
+    def read_position(self) -> int:
+        """
+        Read current position in raw units.
+        
+        Returns:
+            (position, ok) - position value and success flag
+        """
+        pos, ok = self.driver.pos_read(self.id)
+        if not ok:
+            return None
+        return pos 
+    
     def read_temperature(self) -> Tuple[int, bool]:
         """
         Read motor temperature in °C.
@@ -215,25 +246,22 @@ class BusServo:
         Returns:
             Dictionary with position, temperature, voltage, and success flags
         """
-        pos, pos_ok = self.read_position()
-        temp, temp_ok = self.read_temperature()
-        vin, vin_ok = self.read_voltage()
+        pos = self.read_position()
+        temp = self.read_temperature()
+        vin = self.read_voltage()
         
         return {
             "id": self.id,
             "name": self.name,
             "position": pos,
-            "position_ok": pos_ok,
             "temperature": temp,
-            "temperature_ok": temp_ok,
             "voltage_mv": vin,
-            "voltage_ok": vin_ok,
         }
 
     def print_status(self):
         """Print servo status to console."""
         s = self.status()
         print(f"\n{self.name} (ID={self.id})")
-        print(f"  Position:    {s['position']} {'✓' if s['position_ok'] else '✗'}")
-        print(f"  Temperature: {s['temperature']}°C {'✓' if s['temperature_ok'] else '✗'}")
-        print(f"  Voltage:     {s['voltage_mv']}mV {'✓' if s['voltage_ok'] else '✗'}")
+        print(f"  Position:    {s['position']}")
+        print(f"  Temperature: {s['temperature']}°C")
+        print(f"  Voltage:     {s['voltage_mv']}mV")

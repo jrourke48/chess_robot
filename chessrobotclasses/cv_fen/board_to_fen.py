@@ -6,12 +6,20 @@
 import time
 import cv2
 import numpy as np
-from picamera2 import Picamera2
 from collections import deque
 import sys
 import os
 import json
 import pickle
+
+# Try to import Picamera2 (optional - for Raspberry Pi)
+try:
+    from picamera2 import Picamera2
+    HAS_PICAMERA2 = True
+except ImportError:
+    HAS_PICAMERA2 = False
+    Picamera2 = None
+
 sys.path.append('/home/jfrourke/chess_robot/chessboard2fen')
 
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,22 +60,28 @@ DST = np.array([
     [0, BOARD_PIX - 1],                  # BL
 ], dtype=np.float32)
 
-# Initialize Pi Camera
-picam2 = Picamera2()
-full_w, full_h = picam2.camera_properties["PixelArraySize"]
-config = picam2.create_preview_configuration(
-    main={"size": (1640, 1232), "format": "RGB888"},
-    controls={"ScalerCrop": (0, 0, full_w, full_h)}
-)
-picam2.configure(config)
-picam2.start()
+# Initialize Pi Camera (only if available)
+picam2 = None
+if HAS_PICAMERA2:
+    try:
+        picam2 = Picamera2()
+        full_w, full_h = picam2.camera_properties["PixelArraySize"]
+        config = picam2.create_preview_configuration(
+            main={"size": (1640, 1232), "format": "RGB888"},
+            controls={"ScalerCrop": (0, 0, full_w, full_h)}
+        )
+        picam2.configure(config)
+        picam2.start()
 
-# Give camera time to stabilize
-time.sleep(2)
+        # Give camera time to stabilize
+        time.sleep(2)
 
-# Lock exposure and white balance for stability (optional but recommended)
-# picam2.set_controls({"ExposureTime": 10000, "AnalogueGain": 1.0})
-# picam2.set_controls({"AwbEnable": 0})  # Lock white balance after it settles
+        # Lock exposure and white balance for stability (optional but recommended)
+        # picam2.set_controls({"ExposureTime": 10000, "AnalogueGain": 1.0})
+        # picam2.set_controls({"AwbEnable": 0})  # Lock white balance after it settles
+    except Exception as e:
+        print(f"Warning: Could not initialize camera: {e}")
+        picam2 = None
 
 
 class BoardStateTracker:
@@ -123,6 +137,10 @@ class BoardStateTracker:
 # ===== Step 1: Capture Frame =====
 def capture_frame():
     """Capture a frame from the Pi camera"""
+    if picam2 is None:
+        print("Error: Camera not available. Cannot capture frame.")
+        return None
+    
     frame = picam2.capture_array()
     # Convert from RGB to BGR for OpenCV
     img_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

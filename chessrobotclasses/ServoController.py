@@ -37,7 +37,7 @@ class ServoController:
     #update all the servo positions at once, with a list of four values representing the desired position for each servo.
     def update_servo_positions(self, position_vector: list):
         for i in range(4):
-            self.Servo_Motors[i].move(position_vector[i], 50)
+            self.Servo_Motors[i].move_rad(position_vector[i], 50)
     #turn on all the servos
     def turn_on_all(self):
         for servo in self.Servo_Motors:
