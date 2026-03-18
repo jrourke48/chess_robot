@@ -113,6 +113,9 @@ def main():
     opponent_move = asyncio.Queue() # Queue for opponent moves inputted in UI or detected by CV 
     #depending on the game mode
     theta_vector = asyncio.Queue() # Queue for the current joint angles of the robot, 
+    #thetas read by the motor
+    actual_thetas = asyncio.Queue() # Queue for the actual joint angles of the robot,
+    #updated by the servo controller task reading the servo positions and read by the endgame eff
     #updated by the cpu task and read by the servo controller task for motion execution
     detected_fen = asyncio.Queue() # Queue for the detected FEN string after a move is made,
     #updated by the CV task and read by the endgame effector CPU task for move validation
@@ -130,6 +133,20 @@ def main():
     async def servo_controller_task():
         in_calibration_mode = False
         while True:
+            # Check for kill switch - stop all motors immediately
+            if kill_switch.is_set():
+                print("KILL SWITCH ACTIVATED - Stopping all motors!")
+                if servo_controller is not None:
+                    # Move all servos to neutral/safe position
+                    try:
+                        neutral_thetas = [150, 150, 150, 150]  # Safe neutral position
+                        servo_controller.update_servo_positions(neutral_thetas)
+                    except Exception as e:
+                        print(f"Error stopping servos: {e}")
+                # Keep waiting until kill switch is cleared from UI
+                await asyncio.sleep(0.1)
+                continue
+            
             # Check if calibration mode is requested
             if calibrate_servos.is_set():
                 in_calibration_mode = True
@@ -141,7 +158,9 @@ def main():
                 # Normal operation: wait for servo commands (with timeout to avoid blocking)
                 try:
                     await asyncio.wait_for(servo_mode.wait(), timeout=0.01)
-                    current_thetas = await theta_vector.get()
+                    if servo_controller is not None:
+                        await actual_thetas.put(servo_controller.get_servo_positions()) # Read actual servo positions for feedback
+                    current_thetas = await theta_vector.get()  # Get the next set of joint angles to move to    
                     print(f"Updating servo positions to: {current_thetas}")
                     if servo_controller is not None:
                         servo_controller.update_servo_positions(current_thetas)
@@ -196,6 +215,7 @@ def main():
             'opponent_move': opponent_move,
             'detected_fen': detected_fen,
             'theta_vector': theta_vector,
+            "actual_thetas": actual_thetas,
             'update_ui_boardstate': update_ui_boardstate,
             'update_ui_robot_waypoints': update_ui_robot_waypoints,
             'winner': winner
@@ -252,6 +272,7 @@ def main():
         'use_cv': use_cv,
         'calibrate_servos': calibrate_servos,
         'calibrate_servos2': calibrate_servos2,
+        'kill_switch': kill_switch,
     }
     init_ui_runtime(ui_queues, ui_events, chess_board, motion_planner)
 

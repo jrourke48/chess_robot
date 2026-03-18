@@ -390,6 +390,17 @@ async def ws_endpoint(ws: WebSocket):
                 await ws_log(ws, "Calibration Stage 2: Confirming offset positions...", "success")
                 await ws_send(ws, {"type": "calibration", "stage": 2, "status": "completed"})
 
+            elif mtype == "kill_switch":
+                action = msg.get("action", "activate")
+                if action == "activate":
+                    events["kill_switch"].set()
+                    await ws_log(ws, "🛑 KILL SWITCH ACTIVATED - All motors stopped!", "error")
+                    await ws_send(ws, {"type": "kill_switch", "status": "activated"})
+                elif action == "reset":
+                    events["kill_switch"].clear()
+                    await ws_log(ws, "Kill switch reset. Ready to resume.", "success")
+                    await ws_send(ws, {"type": "kill_switch", "status": "reset"})
+
             else:
                 await ws_log(ws, f"Unknown message type: {mtype}", level="warn")
 
@@ -533,6 +544,11 @@ def index():
                 <h3 style="margin-top: 0;">Servo Calibration</h3>
                 <button id="calibrateBtn1" class="secondary" style="background: #3b82f6; border-color: #3b82f6; color: #fff;" onclick="calibrateStage1()">Stage 1: Init Calibration</button>
                 <button id="calibrateBtn2" class="secondary" style="background: #8b5cf6; border-color: #8b5cf6; color: #fff;" onclick="calibrateStage2()">Stage 2: Confirm Offsets</button>
+                
+                <hr style="margin: 12px 0; border: none; border-top: 1px solid #e5e7eb;">
+                <h3 style="margin-top: 0; color: #dc2626;">⚠️ Emergency Control</h3>
+                <button id="killSwitchBtn" class="secondary" style="background: #dc2626; border-color: #9f1239; color: #fff; font-weight: bold; font-size: 1.1em;" onclick="activateKillSwitch()">Kill Switch</button>
+                <button id="killSwitchReset" class="secondary" style="background: #84cc16; border-color: #65a30d; color: #000; display: none; font-weight: bold;" onclick="resetKillSwitch()">Reset Kill Switch</button>
             </div>
 
             <h3>Session</h3>
@@ -617,6 +633,22 @@ def index():
 
         function calibrateStage2() {
             ws.send(JSON.stringify({ type: "calibrate_stage2" }));
+        }
+
+        function activateKillSwitch() {
+            if (confirm("⚠️ EMERGENCY STOP: Are you absolutely certain? This will immediately halt all motors!")) {
+                ws.send(JSON.stringify({ type: "kill_switch", action: "activate" }));
+                document.getElementById("killSwitchBtn").style.display = "none";
+                document.getElementById("killSwitchReset").style.display = "block";
+            }
+        }
+
+        function resetKillSwitch() {
+            if (confirm("Reset the kill switch to resume motor operation?")) {
+                ws.send(JSON.stringify({ type: "kill_switch", action: "reset" }));
+                document.getElementById("killSwitchBtn").style.display = "block";
+                document.getElementById("killSwitchReset").style.display = "none";
+            }
         }
 
         function updateCalibrationButtonState(gameStarted) {

@@ -10,6 +10,7 @@ class EndgameEffectorFSM:
         self.opponent_move = queues['opponent_move']
         self.detected_fen = queues['detected_fen']
         self.theta_vector = queues['theta_vector']
+        self.actual_thetas = queues['actual_thetas']
         self.update_ui_boardstate = queues['update_ui_boardstate']
         self.update_ui_robot_waypoints = queues['update_ui_robot_waypoints']
         self.winner = queues['winner']
@@ -250,10 +251,17 @@ class EndgameEffectorFSM:
             t = time.time() - start_time
             current_thetas = InverseKinematics_TrajectoryPlanner.evaluate_cubic_spline(self.trajectory_coeffs, t)
             await self.theta_vector.put(current_thetas)  # Send the current joint angles to the servo controller task
-            await asyncio.sleep(0.05)  # Control loop delay (40ms)
+            await asyncio.sleep(0.05)  # Control loop delay (50ms)
         # Send the exact final waypoint to ensure we reach the target position
         await self.theta_vector.put(self.next_jwaypoint)
         await asyncio.sleep(0.05)  # Give servo controller time to consume final waypoint
+        totalerror = 0
+        actual_thetas = await self.actual_thetas.get()
+        for i in range(4):
+            totalerror += abs(self.next_jwaypoint[i] - actual_thetas[i])
+        #once we each motor is 0.05 radians away from the target waypoint in joint space, we can move on to the next waypoint, otherwise we should repeat the trajectory execution for the current waypoint
+        if totalerror > 0.2:
+            return self.EXECUTE_CURRENT_WAYPOINT  # If we're not close enough to the target, repeat the trajectory execution
         #after executing the trajectory for the current waypoint, update the current waypoint to the next waypoint and go back to executing the move
         self.cur_jwaypoint = self.next_jwaypoint
         self.cur_waypoint_index += 1  # Increment the waypoint index
